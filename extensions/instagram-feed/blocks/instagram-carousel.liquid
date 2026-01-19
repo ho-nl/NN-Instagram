@@ -1,20 +1,33 @@
 {% comment %} Instagram Feed {% endcomment %}
-{% assign lists = metaobjects['instagram-list']['instagram-feed-list'] %}
+{% comment %} Use metaobject setting to allow selecting specific Instagram account {% endcomment %}
+{% assign lists = block.settings.instagram_list %}
 
-<div class="instagram-feed-container">
-  {% if block.settings.show_header %}
-    <header>
-      <h2>Instagram Feed</h2>
-    </header>
-  {% endif %}
-  <section class="instagram-feed">
-    <div class="scroll-left" role="button" aria-label="Scroll left" tabindex="0">
-      <svg class="arrow-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z" />
-      </svg>
+{% comment %} Fallback: try to find any instagram-list if none selected {% endcomment %}
+{% if lists == blank %}
+  {% assign lists = metaobjects['instagram-list'].first %}
+{% endif %}
+
+{% if lists == blank %}
+  <div class="instagram-feed-container">
+    <div style="padding: 40px; text-align: center; color: #999;">
+      <p>No Instagram feed found. Please connect your Instagram account and sync your posts from the app admin.</p>
     </div>
-    <div class="fade-left" aria-hidden="true"></div>
-    {% for post in lists.posts.value %}
+  </div>
+{% else %}
+  <div class="instagram-feed-container">
+    {% if block.settings.show_header %}
+      <header>
+        <h2>Instagram Feed</h2>
+      </header>
+    {% endif %}
+    <section class="instagram-feed">
+      <div class="scroll-left" role="button" aria-label="Scroll left" tabindex="0">
+        <svg class="arrow-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z" />
+        </svg>
+      </div>
+      <div class="fade-left" aria-hidden="true"></div>
+      {% for post in lists.posts.value %}
       <div
         class="instagram-card"
         data-index="{{ forloop.index0 }}"
@@ -65,11 +78,11 @@
       <h4>@{{ lists.username }}</h4>
     </footer>
   {% endif %}
-</div>
+  </div>
 
-<div class="modal" aria-hidden="true">
-  <div class="modal-posts-container">
-    {% for post in lists.posts.value %}
+  <div class="modal" aria-hidden="true">
+    <div class="modal-posts-container">
+      {% for post in lists.posts.value %}
       <div class="modal-post" data-post-index="{{ forloop.index0 }}">
         <!-- Header with username -->
         <div class="modal-header">
@@ -158,13 +171,13 @@
         </div>
       </div>
     {% endfor %}
+    </div>
   </div>
-</div>
 
-<script>
-  // Minimal JavaScript - just handles visibility and navigation
-  (function () {
-    const modal = document.querySelector('.modal');
+  <script>
+    // Minimal JavaScript - just handles visibility and navigation
+    (function () {
+      const modal = document.querySelector('.modal');
 
     if (!modal) return;
 
@@ -698,7 +711,8 @@
     // initial call
     setTimeout(refreshHints, 120);
   })();
-</script>
+  </script>
+{% endif %}
 
 <style>
   /* CSS Variables for block settings */
@@ -1210,6 +1224,13 @@
   "name": "Instagram Feed",
   "target": "section",
   "settings": [
+    {
+      "type": "metaobject",
+      "id": "instagram_list",
+      "label": "Instagram Account",
+      "metaobject_type": "instagram-list",
+      "info": "Select which Instagram account to display. If left blank, the first connected account will be used."
+    },
     {
       "type": "range",
       "id": "posts_limit",

@@ -18,6 +18,7 @@ import {
   getInstagramProfile,
   getSyncStats,
   getThemePages,
+  checkAppBlockInstallation,
 } from "../utils/instagram.server";
 import {
   handleSyncAction,
@@ -64,12 +65,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Fetch theme pages (templates) for app block installation
   const themePages = await getThemePages(admin);
 
+  // Check which templates have the Instagram block installed
+  const appBlockStatus = await checkAppBlockInstallation(admin);
+
+  console.log("🔍 Dashboard loader returning appBlockStatus:", appBlockStatus);
+
   return {
     shop: session.shop,
     instagramAccount,
     syncStats,
     isConnected: !!socialAccount,
     themePages,
+    appBlockStatus,
   };
 };
 
@@ -99,8 +106,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function Index() {
-  const { shop, instagramAccount, syncStats, isConnected, themePages } =
-    useLoaderData<typeof loader>();
+  const {
+    shop,
+    instagramAccount,
+    syncStats,
+    isConnected,
+    themePages,
+    appBlockStatus,
+  } = useLoaderData<typeof loader>();
+
+  console.log("🎨 Component received appBlockStatus:", appBlockStatus);
+
   const submit = useSubmit();
   const navigation = useNavigation();
   const fetcher = useFetcher();
@@ -112,6 +128,7 @@ export default function Index() {
   const [deleteMessage, setDeleteMessage] = useState<string>("");
   const [selectedPage, setSelectedPage] = useState<string>("index");
   const [showPageModal, setShowPageModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const isActionRunning =
     navigation.state === "submitting" || fetcher.state === "submitting";
@@ -222,6 +239,12 @@ export default function Index() {
       "_parent",
       "width=600,height=700",
     );
+  };
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    // Use window.location.reload to force a full page refresh
+    window.location.reload();
   };
 
   const handleDeleteData = () => {
@@ -363,6 +386,18 @@ export default function Index() {
       disabled: !isConnected || !hasPosts,
       optional: true,
     },
+    {
+      id: 4,
+      title: "Refresh",
+      description:
+        "If app block status or sync data isn't updating, click refresh to reload the page and update the information.",
+      completed: false,
+      current: false,
+      action: handleRefresh,
+      actionLabel: "Refresh",
+      iconType: "refresh" as const,
+      optional: true,
+    },
   ];
 
   const allSteps = [...steps, ...optionalSteps];
@@ -456,35 +491,50 @@ export default function Index() {
                               // Show page selector for "Add to Theme" step
                               <s-stack gap="small-200">
                                 <s-text type="strong">Select a page:</s-text>
-                                {themePages.map((page) => (
-                                  <s-clickable
-                                    key={page.value}
-                                    onClick={() =>
-                                      handleAddToThemeWithPage(page.value)
-                                    }
-                                    border="base"
-                                    borderRadius="base"
-                                    padding="small-400"
-                                  >
-                                    <s-stack direction="inline" gap="small-200">
-                                      <s-icon
-                                        type={
-                                          page.value === "index"
-                                            ? "home"
-                                            : page.value === "product"
-                                              ? "product"
-                                              : page.value === "collection"
-                                                ? "collection"
-                                                : "page"
-                                        }
-                                      />
-                                      <div style={{ flex: 1 }}>
-                                        <s-text>{page.label}</s-text>
-                                      </div>
-                                      <s-badge tone="info">Inactive</s-badge>
-                                    </s-stack>
-                                  </s-clickable>
-                                ))}
+                                {themePages.map((page) => {
+                                  const isInstalled =
+                                    appBlockStatus?.[page.value] || false;
+                                  return (
+                                    <s-clickable
+                                      key={page.value}
+                                      onClick={() =>
+                                        handleAddToThemeWithPage(page.value)
+                                      }
+                                      border="base"
+                                      borderRadius="base"
+                                      padding="small-400"
+                                    >
+                                      <s-stack
+                                        direction="inline"
+                                        gap="small-200"
+                                      >
+                                        <s-icon
+                                          type={
+                                            page.value === "index"
+                                              ? "home"
+                                              : page.value === "product"
+                                                ? "product"
+                                                : page.value === "collection"
+                                                  ? "collection"
+                                                  : "page"
+                                          }
+                                        />
+                                        <div style={{ flex: 1 }}>
+                                          <s-text>{page.label}</s-text>
+                                        </div>
+                                        <s-badge
+                                          tone={
+                                            isInstalled ? "success" : "neutral"
+                                          }
+                                        >
+                                          {isInstalled
+                                            ? "✓ Active"
+                                            : "Inactive"}
+                                        </s-badge>
+                                      </s-stack>
+                                    </s-clickable>
+                                  );
+                                })}
                                 <s-button
                                   onClick={() => setShowPageModal(false)}
                                 >
@@ -635,10 +685,7 @@ export default function Index() {
                     />
                   )}
                   <s-stack gap="small-100">
-                    <s-text type="strong">@{instagramAccount.username}</s-text>
-                    <s-text color="subdued">
-                      User ID: {instagramAccount.userId}
-                    </s-text>
+                    <s-badge>@{instagramAccount.username}</s-badge>
                     <s-text color="subdued">
                       Connected {formatDate(instagramAccount.connectedAt)}
                     </s-text>

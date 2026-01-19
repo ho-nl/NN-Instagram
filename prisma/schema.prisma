@@ -32,6 +32,7 @@ model SocialAccount {
   shop        String
   provider    String // "facebook" or "instagram"
   userId      String?
+  username    String? // Instagram username for tracking account switches
   accessToken String
   expiresAt   DateTime?
   createdAt   DateTime  @default(now())

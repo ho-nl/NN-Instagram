@@ -299,7 +299,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // ========================================
   // HELPER FUNCTION 4.5: metaObjectUpsert instead of Create to avoid duplicates
   // ========================================
-  async function upsertPostMetaobject(post: InstagramPost, fileIds: string[]) {
+  async function upsertPostMetaobject(post: InstagramPost, fileIds: string[], username: string) {
+    const postHandle = `${username}-post-${post.id}`;
+
     const mutation = `#graphql
     mutation UpsertPostMetaObject($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
       metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
@@ -334,7 +336,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       variables: {
         handle: {
           type: "instagram-post",
-          handle: `instagram-post-${post.id}`,
+          handle: postHandle,
         },
         metaobject: {
           fields: [
@@ -352,7 +354,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     addLog("metaobjectUpsert_post", {
       postId: post.id,
-      handle: `instagram-post-${post.id}`,
+      handle: postHandle,
       fileCount: fileIds.length,
       fileIds,
       input: {
@@ -373,7 +375,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // ========================================
   // HELPER FUNCTION 4.6: Upsert Instagram list metaobject
   // ========================================
-  async function upsertListMetaobject(igData: any, postObjectIds: string[]) {
+  async function upsertListMetaobject(igData: any, postObjectIds: string[], username: string, displayName: string) {
     const mutation = `#graphql
     mutation UpsertListMetaObject($handle: MetaobjectHandleInput!, $metaobject: MetaobjectUpsertInput!) {
       metaobjectUpsert(handle: $handle, metaobject: $metaobject) {
@@ -406,11 +408,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     }
     `;
 
+    const listHandle = `${username}-feed-list`;
+
     const response = await admin.graphql(mutation, {
       variables: {
         handle: {
           type: "instagram-list",
-          handle: "instagram-feed-list",
+          handle: listHandle,
         },
         metaobject: {
           fields: [
@@ -432,7 +436,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const data = await response.json();
 
     addLog("metaobjectUpsert_list", {
-      handle: "instagram-feed-list",
+      handle: listHandle,
       postCount: postObjectIds.length,
       postObjectIds,
       response: data,
@@ -448,8 +452,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // ========================================
   // HELPER FUNCTION 5: Check if a single post exists by handle
   // ========================================
-  async function getExistingPost(postId: string) {
-    const handle = `instagram-post-${postId}`;
+  async function getExistingPost(postId: string, username: string) {
+    const handle = `${username}-post-${postId}`;
 
     const query = `#graphql
       query GetPostByHandle($handle: String!) {
@@ -543,6 +547,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const posts = igData.data as InstagramPost[];
+  const currentUsername = userData.username;
+  const displayName = userData.name;
 
   if (!posts || posts.length === 0) {
     return {
@@ -550,6 +556,142 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       message: "No Instagram posts found to sync",
       postsCount: 0,
     };
+  }
+
+  // ========================================
+  // AUTO-DELETE OLD ACCOUNT DATA ON SWITCH
+  // ========================================
+  // Check if the account username has changed (account switch detected)
+  if (account.username && account.username !== currentUsername) {
+    console.log(`🔄 Account switch detected: ${account.username} → ${currentUsername}`);
+    
+    addLog("accountSwitch", {
+      oldUsername: account.username,
+      newUsername: currentUsername,
+      action: "deleting old account data",
+    });
+
+    // Delete all metaobjects with old username prefix
+    const oldPostsQuery = await admin.graphql(`
+      #graphql
+      query {
+        metaobjects(type: "instagram-post", first: 250) {
+          edges { 
+            node { 
+              id 
+              handle
+            } 
+          }
+        }
+      }
+    `);
+    const oldPostsData = await oldPostsQuery.json();
+    const oldPostMetaobjects = oldPostsData.data?.metaobjects?.edges || [];
+
+    // Filter posts that belong to old username
+    const oldUsernamePrefix = `${account.username}-post-`;
+    const postsToDelete = oldPostMetaobjects.filter((edge: any) => 
+      edge.node.handle?.startsWith(oldUsernamePrefix)
+    );
+
+    console.log(`  Deleting ${postsToDelete.length} metaobjects from old account @${account.username}`);
+
+    // Delete old post metaobjects
+    for (const edge of postsToDelete) {
+      await admin.graphql(
+        `#graphql
+        mutation metaobjectDelete($id: ID!) {
+          metaobjectDelete(id: $id) {
+            deletedId
+            userErrors { field message }
+          }
+        }
+        `,
+        { variables: { id: edge.node.id } }
+      );
+    }
+
+    // Delete old list metaobject
+    const oldListHandle = `${account.username}-feed-list`;
+    const oldListQuery = await admin.graphql(`
+      #graphql
+      query GetListByHandle($handle: String!) {
+        metaobjectByHandle(handle: {type: "instagram-list", handle: $handle}) {
+          id
+        }
+      }
+    `, {
+      variables: { handle: oldListHandle }
+    });
+    const oldListData = await oldListQuery.json();
+    const oldListId = oldListData.data?.metaobjectByHandle?.id;
+
+    if (oldListId) {
+      console.log(`  Deleting old list metaobject: ${oldListHandle}`);
+      await admin.graphql(
+        `#graphql
+        mutation metaobjectDelete($id: ID!) {
+          metaobjectDelete(id: $id) {
+            deletedId
+            userErrors { field message }
+          }
+        }
+        `,
+        { variables: { id: oldListId } }
+      );
+    }
+
+    // Delete old files
+    const oldFilesQuery = await admin.graphql(`
+      #graphql
+      query {
+        files(first: 250, query: "alt:${account.username}-post_") {
+          edges { 
+            node { 
+              id 
+              alt
+            } 
+          }
+        }
+      }
+    `);
+    const oldFilesData = await oldFilesQuery.json();
+    const oldFiles = oldFilesData.data?.files?.edges?.filter((edge: any) =>
+      edge.node.alt?.startsWith(`${account.username}-post_`)
+    ) || [];
+
+    if (oldFiles.length > 0) {
+      const oldFileIds = oldFiles.map((edge: any) => edge.node.id);
+      console.log(`  Deleting ${oldFileIds.length} files from old account @${account.username}`);
+      
+      await admin.graphql(
+        `#graphql
+        mutation fileDelete($fileIds: [ID!]!) {
+          fileDelete(fileIds: $fileIds) {
+            deletedFileIds
+            userErrors { field message }
+          }
+        }
+        `,
+        { variables: { fileIds: oldFileIds } }
+      );
+    }
+
+    addLog("accountSwitchCleanup", {
+      deletedMetaobjects: postsToDelete.length + (oldListId ? 1 : 0),
+      deletedFiles: oldFiles.length,
+    });
+
+    console.log(`✓ Cleanup complete for old account @${account.username}`);
+  }
+
+  // Update the stored username in the database
+  if (!account.username || account.username !== currentUsername) {
+    await prisma.socialAccount.update({
+      where: { id: account.id },
+      data: { username: currentUsername },
+    });
+    console.log(`✓ Updated stored username to @${currentUsername}`);
   }
 
   addLog("fetchInstagramPosts", {
@@ -570,8 +712,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const uploadResults: any[] = [];
   const postObjectIds: string[] = [];
   let existingCount = 0;
-  let username = userData.username;
-  let displayName = userData.name;
 
   // Loop through each Instagram post
   for (const post of posts) {
@@ -579,7 +719,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     let fileIds: string[] = [];
 
     // Check if post already exists by handle
-    const existingPost = await getExistingPost(post.id);
+    const existingPost = await getExistingPost(post.id, currentUsername);
 
     // UPDATING EXISTING POSTS LOGIC
     // If post already exists, we update it with new data (likes, comments) but reuse existing files
@@ -601,7 +741,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       });
 
       // Update the metaobject with new data (likes, comments, etc.) but keep same files
-      const metaobjectResult = await upsertPostMetaobject(post, fileIds);
+      const metaobjectResult = await upsertPostMetaobject(post, fileIds, currentUsername);
 
       // Check for errors
       if (metaobjectResult.data?.metaobjectUpsert?.userErrors?.length > 0) {
@@ -631,7 +771,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         // This is a carousel with multiple images/videos
         for (let i = 0; i < post.children.data.length; i++) {
           const child = post.children.data[i];
-          const childAlt = `instagram-post_${post.id}_${child.id}`;
+          const childAlt = `${currentUsername}-post_${post.id}_${child.id}`;
 
           // Upload the child media
           const result = await uploadMediaFile(
@@ -649,7 +789,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       } else {
         // This is a single image or video
-        const alt = `instagram-post_${post.id}`;
+        const alt = `${currentUsername}-post_${post.id}`;
 
         // Upload the media
         const result = await uploadMediaFile(
@@ -668,7 +808,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       // Create metaobject if we have file IDs
       if (fileIds.length > 0) {
-        const metaobjectResult = await upsertPostMetaobject(post, fileIds);
+        const metaobjectResult = await upsertPostMetaobject(post, fileIds, currentUsername);
 
         // Check for errors
         if (metaobjectResult.data?.metaobjectUpsert?.userErrors?.length > 0) {
@@ -689,7 +829,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Create Instagram list metaobject
   if (postObjectIds.length > 0) {
-    const listResult = await upsertListMetaobject(igData, postObjectIds);
+    const listResult = await upsertListMetaobject(igData, postObjectIds, currentUsername, displayName);
 
     if (listResult.data?.metaobjectUpsert?.userErrors?.length > 0) {
       console.error(
@@ -726,7 +866,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     success: true,
-    username,
+    username: currentUsername,
     displayName,
     // posts,
     // postsProcessed: posts.length,

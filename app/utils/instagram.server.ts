@@ -33,7 +33,7 @@ export async function getInstagramProfile(
  */
 export async function getSyncStats(admin: any): Promise<SyncStats> {
   try {
-    // Count instagram-post metaobjects
+    // Count instagram-post metaobjects (all accounts)
     const postsCountQuery = await admin.graphql(`#graphql
       query {
         metaobjects(type: "instagram-post", first: 250) {
@@ -45,10 +45,10 @@ export async function getSyncStats(admin: any): Promise<SyncStats> {
     `);
     const postsCountData = await postsCountQuery.json();
 
-    // Get instagram-list metaobject and last sync time
+    // Get instagram-list metaobjects (all accounts) and last sync time
     const listQuery = await admin.graphql(`#graphql
       query {
-        metaobjects(type: "instagram-list", first: 1) {
+        metaobjects(type: "instagram-list", first: 10) {
           nodes {
             id
             fields {
@@ -62,10 +62,10 @@ export async function getSyncStats(admin: any): Promise<SyncStats> {
     `);
     const listData = await listQuery.json();
 
-    // Count files with instagram-post prefix in alt text
+    // Count files with -post_ pattern in alt text (covers all username prefixes)
     const filesCountQuery = await admin.graphql(`#graphql
       query {
-        files(first: 250, query: "alt:instagram-post_") {
+        files(first: 250, query: "alt:-post_") {
           edges {
             node {
               id
@@ -77,22 +77,24 @@ export async function getSyncStats(admin: any): Promise<SyncStats> {
     `);
     const filesCountData = await filesCountQuery.json();
 
-    // Filter files to only those starting with "instagram"
+    // Filter files to only those with pattern: {username}-post_
     const instagramFiles =
       filesCountData.data?.files?.edges?.filter((edge: any) =>
-        edge.node.alt?.startsWith("instagram"),
+        edge.node.alt?.includes("-post_"),
       ) || [];
 
-    // Calculate metaobjects count: posts + list (if exists)
+    // Calculate metaobjects count: posts + lists
     const postsCount = postsCountData.data?.metaobjects?.nodes?.length || 0;
-    const hasListMetaobject =
-      (listData.data?.metaobjects?.nodes?.length || 0) > 0;
+    const listCount = listData.data?.metaobjects?.nodes?.length || 0;
+
+    // Get most recent update time from any list
+    const lastSyncTime = listData.data?.metaobjects?.nodes?.[0]?.updatedAt || null;
 
     return {
-      lastSyncTime: listData.data?.metaobjects?.nodes?.[0]?.updatedAt || null,
+      lastSyncTime,
       postsCount,
       filesCount: instagramFiles.length,
-      metaobjectsCount: postsCount + (hasListMetaobject ? 1 : 0),
+      metaobjectsCount: postsCount + listCount,
     };
   } catch (error) {
     console.error("Error fetching sync stats:", error);
@@ -147,3 +149,206 @@ export async function getThemePages(
 
   return [];
 }
+
+/**
+ * Check which templates have the Instagram app block installed
+ * Returns an object mapping template names to their installation status
+ * 
+ * Alternative simpler approach: Just check if templates exist and have sections
+ * The UI can guide users to add the block via theme editor links
+ */
+export async function checkAppBlockInstallation(
+  admin: any,
+): Promise<Record<string, boolean>> {
+  const installationStatus: Record<string, boolean> = {};
+
+  // Initialize all templates as false
+  const templates = ["index", "product", "collection", "page", "blog", "article", "cart", "search"];
+  templates.forEach(template => {
+    installationStatus[template] = false;
+  });
+
+  try {
+    // Get the published theme
+    const themesQuery = await admin.graphql(`
+      #graphql
+      query {
+        themes(first: 1, roles: MAIN) {
+          nodes {
+            id
+            name
+          }
+        }
+      }
+    `);
+    const themesData = await themesQuery.json();
+    const publishedTheme = themesData.data?.themes?.nodes?.[0];
+
+    if (!publishedTheme) {
+      console.log("No published theme found");
+      return installationStatus;
+    }
+
+    // Fetch all relevant theme files in one query
+    let hasNextPage = true;
+    let cursor: string | null = null;
+
+    while (hasNextPage) {
+      const filesQuery: any = await admin.graphql(`
+        #graphql
+        query ThemeFilesForBlocks($themeId: ID!, $after: String) {
+          theme(id: $themeId) {
+            files(
+              first: 50
+              after: $after
+              filenames: [
+                "sections/*.liquid"
+                "templates/*.json"
+                "templates/customers/*.json"
+                "config/settings_data.json"
+              ]
+            ) {
+              edges {
+                cursor
+                node {
+                  filename
+                  contentType
+                  body {
+                    ... on OnlineStoreThemeFileBodyText { content }
+                  }
+                }
+              }
+              pageInfo { hasNextPage endCursor }
+            }
+          }
+        }
+      `, {
+        variables: {
+          themeId: publishedTheme.id,
+          after: cursor,
+        },
+      });
+
+      const filesData: any = await filesQuery.json();
+      const edges = filesData.data?.theme?.files?.edges || [];
+      const pageInfo: any = filesData.data?.theme?.files?.pageInfo;
+
+      console.log(`📦 Fetched ${edges.length} theme files...`);
+
+      // Check each file for app block
+      for (const edge of edges) {
+        const file = edge.node;
+        const content = file.body?.content;
+        
+        if (content) {
+          // For JSON files, parse and check
+          if (file.filename.endsWith('.json')) {
+            try {
+              // Strip comments from JSON (Shopify theme files may have them)
+              // Remove /* ... */ style comments
+              let cleanContent = content.replace(/\/\*[\s\S]*?\*\//g, '');
+              // Remove // ... style comments
+              cleanContent = cleanContent.replace(/\/\/.*$/gm, '');
+              // Trim any leading/trailing whitespace
+              cleanContent = cleanContent.trim();
+              
+              const parsedContent = JSON.parse(cleanContent);
+              const hasBlock = checkForAppBlock(parsedContent);
+              
+              console.log(`  Checking ${file.filename}: ${hasBlock ? '✓ HAS BLOCK' : '✗ no block'}`);
+              
+              if (hasBlock) {
+                // Extract template name from filename
+                const match = file.filename.match(/templates\/([^/]+)\.json/);
+                if (match) {
+                  const templateName = match[1];
+                  console.log(`    Extracted template name: ${templateName}`);
+                  if (templates.includes(templateName)) {
+                    installationStatus[templateName] = true;
+                    console.log(`    ✓ Marked ${templateName} as having app block`);
+                  } else {
+                    console.log(`    ⚠️  Template ${templateName} not in tracked list`);
+                  }
+                } else {
+                  console.log(`    ⚠️  Could not extract template name from ${file.filename}`);
+                }
+              }
+            } catch (parseError) {
+              // If JSON parsing fails, try searching the raw content as a string
+              // This handles files with invalid JSON but may still contain our block reference
+              const hasBlock = content.includes('instagram-carousel') || 
+                               content.includes('instagram-feed') ||
+                               /shopify:\/\/apps\/[^/]+\/blocks\/instagram-carousel/.test(content);
+              
+              if (hasBlock) {
+                const match = file.filename.match(/templates\/([^/]+)\.json/);
+                if (match) {
+                  const templateName = match[1];
+                  if (templates.includes(templateName)) {
+                    installationStatus[templateName] = true;
+                    console.log(`  ✓ Instagram app block found in ${file.filename} (via string search)`);
+                  }
+                }
+              } else {
+                console.log(`  ⚠️  Skipped ${file.filename} (could not parse, no block found)`);
+              }
+            }
+          }
+          // For Liquid files, do a simple string search
+          else if (file.filename.endsWith('.liquid')) {
+            const hasBlock = checkForAppBlock(content);
+            if (hasBlock) {
+              console.log(`  ✓ Instagram app block found in section: ${file.filename}`);
+            }
+          }
+        }
+      }
+
+      // Check pagination
+      hasNextPage = pageInfo?.hasNextPage || false;
+      cursor = pageInfo?.endCursor || null;
+      
+      if (hasNextPage) {
+        console.log(`📄 More pages available, fetching next batch...`);
+      }
+    }
+
+    console.log('\n📊 Final installation status:', installationStatus);
+    return installationStatus;
+  } catch (error) {
+    console.error("Error checking app block installation:", error);
+    return installationStatus;
+  }
+}
+
+/**
+ * Helper function to check if content contains our app block
+ */
+function checkForAppBlock(content: any): boolean {
+  if (!content || !content.sections) {
+    return false;
+  }
+
+  // Search patterns for our app block
+  const patterns = [
+    'instagram-carousel',
+    'instagram-feed',
+    '/blocks/instagram-carousel',
+  ];
+
+  // Convert content to string for easier searching
+  const contentStr = JSON.stringify(content);
+  
+  // Check if any pattern matches
+  const hasPattern = patterns.some(pattern => contentStr.includes(pattern));
+  
+  if (hasPattern) {
+    return true;
+  }
+  
+  // Also check the actual app block format with client ID
+  // App blocks look like: "shopify://apps/{clientId}/blocks/instagram-carousel/{uuid}"
+  const appBlockRegex = /shopify:\/\/apps\/[^/]+\/blocks\/[^/]+/;
+  return appBlockRegex.test(contentStr);
+}
+
