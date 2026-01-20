@@ -9,6 +9,7 @@ import {
   useNavigation,
   useFetcher,
   useRevalidator,
+  useSearchParams,
 } from "react-router";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
@@ -20,6 +21,7 @@ import {
   getSyncStats,
   getThemePages,
   checkAppBlockInstallation,
+  getInstagramPostsForPreview,
 } from "../utils/instagram.server";
 import {
   handleSyncAction,
@@ -63,6 +65,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Check which templates have the Instagram block installed
   const appBlockStatus = await checkAppBlockInstallation(admin);
 
+  // Fetch Instagram posts for preview (if connected)
+  const instagramPosts = socialAccount
+    ? await getInstagramPostsForPreview(admin, 12)
+    : [];
+
   return {
     shop: session.shop,
     instagramAccount,
@@ -70,6 +77,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     isConnected: !!socialAccount,
     themePages,
     appBlockStatus,
+    instagramPosts,
   };
 };
 
@@ -106,6 +114,7 @@ export default function Index() {
     isConnected,
     themePages,
     appBlockStatus,
+    instagramPosts,
   } = useLoaderData<typeof loader>();
 
   console.log("🎨 Component received appBlockStatus:", appBlockStatus);
@@ -116,6 +125,7 @@ export default function Index() {
   const syncFetcher = useFetcher();
   const themeFetcher = useFetcher();
   const revalidator = useRevalidator();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>("");
   const [syncProgress, setSyncProgress] = useState(0);
@@ -123,9 +133,47 @@ export default function Index() {
   const [selectedPage, setSelectedPage] = useState<string>("index");
   const [showPageModal, setShowPageModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [syncSuccessMessage, setSyncSuccessMessage] = useState<string>("");
+  const [connectSuccessMessage, setConnectSuccessMessage] =
+    useState<string>("");
+
+  // Design settings state
+  const [designSettings, setDesignSettings] = useState({
+    postsLimit: 12,
+    aspectRatio: "portrait" as "portrait" | "square",
+    borderRadius: 24,
+    gap: 32,
+    paddingTopBottom: 0,
+    paddingLeftRight: 0,
+    showHeader: true,
+    showHandle: true,
+  });
+  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">(
+    "desktop",
+  );
 
   const isActionRunning =
     navigation.state === "submitting" || fetcher.state === "submitting";
+
+  // Check for connection success from OAuth callback
+  useEffect(() => {
+    if (searchParams.get("connected") === "true") {
+      setConnectSuccessMessage(
+        "✓ Your Instagram account has been successfully connected!",
+      );
+
+      // Remove the parameter from URL
+      const newParams = new URLSearchParams(searchParams);
+      newParams.delete("connected");
+      setSearchParams(newParams, { replace: true });
+
+      // Auto-dismiss after 5 seconds
+      setTimeout(() => {
+        setConnectSuccessMessage("");
+      }, 5000);
+    }
+  }, [searchParams, setSearchParams]);
 
   // Handle fetcher response (for delete/disconnect actions)
   useEffect(() => {
@@ -202,6 +250,11 @@ export default function Index() {
           setSyncProgress(100);
           setSyncStatus("✓ Sync completed successfully!");
 
+          // Show detailed success message
+          setSyncSuccessMessage(
+            `Successfully synced Instagram posts! Your content is now available in Shopify.`,
+          );
+
           // Reset sync state and revalidate loader data
           setTimeout(() => {
             console.log("🔄 Revalidating data after sync...");
@@ -210,6 +263,11 @@ export default function Index() {
             setSyncProgress(0);
             // Revalidate to fetch updated stats without full page reload
             revalidator.revalidate();
+
+            // Clear success message after showing updated stats
+            setTimeout(() => {
+              setSyncSuccessMessage("");
+            }, 5000);
           }, 2000);
         }, 1500);
       }, 2000);
@@ -228,6 +286,11 @@ export default function Index() {
   }, [themeFetcher.state, themeFetcher.data]);
 
   const handleConnect = () => {
+    setShowConnectModal(true);
+  };
+
+  const handleConfirmConnect = () => {
+    setShowConnectModal(false);
     window.open(
       `/instagram?shop=${encodeURIComponent(shop)}`,
       "_parent",
@@ -359,7 +422,8 @@ export default function Index() {
     {
       id: 1,
       title: "Connect Instagram",
-      description: "Link your Instagram Business account",
+      description:
+        "Authenticate with Instagram OAuth and grant permissions to access your posts and profile information. This allows the app to display your Instagram content on your Shopify store.",
       completed: isConnected,
       current: !isConnected,
       action: handleConnect,
@@ -369,7 +433,8 @@ export default function Index() {
     {
       id: 2,
       title: "Sync Posts",
-      description: "Import your Instagram posts to Shopify",
+      description:
+        "Fetch your Instagram posts using the Instagram Basic Display API. This uploads your media files to Shopify and creates metaobjects for each post with captions, likes, and comments.",
       completed: hasPosts,
       current: isConnected && !hasPosts,
       action: handleSync,
@@ -414,6 +479,23 @@ export default function Index() {
 
   return (
     <s-page>
+      {/* API Permissions Info Banner - Show when connected */}
+      {isConnected && (
+        <s-section>
+          <s-banner tone="info">
+            <s-stack gap="small-100">
+              <s-text type="strong">Instagram API Integration Active</s-text>
+              <s-text>
+                This app uses the Instagram Basic Display API to fetch and sync
+                your Instagram posts to your Shopify store. Posts are
+                automatically synced every 24 hours, or you can manually sync
+                anytime using the "Sync Now" button below.
+              </s-text>
+            </s-stack>
+          </s-banner>
+        </s-section>
+      )}
+
       {/* Progress Steps Card */}
       <s-section>
         <s-card>
@@ -494,7 +576,7 @@ export default function Index() {
 
                         {/* Action Button */}
                         {!step.completed && (step.current || step.optional) && (
-                          <s-box>
+                          <s-box padding="small-400 none small-400 none">
                             {step.id === 3 && showPageModal ? (
                               // Show page selector for "Add to Theme" step
                               <s-stack gap="small-200">
@@ -510,7 +592,7 @@ export default function Index() {
                                       }
                                       border="base"
                                       borderRadius="base"
-                                      padding="small-400"
+                                      padding="small-100"
                                     >
                                       <s-stack
                                         direction="inline"
@@ -591,11 +673,525 @@ export default function Index() {
         </s-card>
       </s-section>
 
+      {/* Design Configuration Section - Show when posts are synced */}
+      {isConnected && hasPosts && (
+        <s-section>
+          <s-card>
+            <s-stack gap="base">
+              <s-stack gap="small-200">
+                <s-heading>Design Settings</s-heading>
+                <s-text color="subdued">
+                  Configure your Instagram feed appearance. Preview updates in
+                  real-time.
+                </s-text>
+              </s-stack>
+
+              <s-divider />
+
+              {/* Two Column Layout: Settings Left, Preview Right */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "400px 1fr",
+                  gap: "24px",
+                }}
+              >
+                {/* Left Column: Settings */}
+                <s-stack gap="base">
+                  {/* Number of Posts */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">
+                        Posts: {designSettings.postsLimit}
+                      </s-text>
+                      <input
+                        type="range"
+                        min="4"
+                        max="24"
+                        step="1"
+                        value={designSettings.postsLimit}
+                        onChange={(e) =>
+                          setDesignSettings({
+                            ...designSettings,
+                            postsLimit: parseInt(e.target.value),
+                          })
+                        }
+                        style={{ width: "100%" }}
+                      />
+                    </s-stack>
+                  </s-box>
+
+                  {/* Aspect Ratio */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">Aspect ratio</s-text>
+                      <s-stack direction="inline" gap="small-200">
+                        <s-button
+                          variant={
+                            designSettings.aspectRatio === "portrait"
+                              ? "primary"
+                              : undefined
+                          }
+                          onClick={() =>
+                            setDesignSettings({
+                              ...designSettings,
+                              aspectRatio: "portrait",
+                            })
+                          }
+                        >
+                          4:6
+                        </s-button>
+                        <s-button
+                          variant={
+                            designSettings.aspectRatio === "square"
+                              ? "primary"
+                              : undefined
+                          }
+                          onClick={() =>
+                            setDesignSettings({
+                              ...designSettings,
+                              aspectRatio: "square",
+                            })
+                          }
+                        >
+                          1:1
+                        </s-button>
+                      </s-stack>
+                    </s-stack>
+                  </s-box>
+
+                  {/* Border Radius */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">
+                        Radius: {designSettings.borderRadius}px
+                      </s-text>
+                      <input
+                        type="range"
+                        min="0"
+                        max="32"
+                        step="4"
+                        value={designSettings.borderRadius}
+                        onChange={(e) =>
+                          setDesignSettings({
+                            ...designSettings,
+                            borderRadius: parseInt(e.target.value),
+                          })
+                        }
+                        style={{ width: "100%" }}
+                      />
+                    </s-stack>
+                  </s-box>
+
+                  {/* Gap */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">Gap: {designSettings.gap}px</s-text>
+                      <input
+                        type="range"
+                        min="0"
+                        max="48"
+                        step="4"
+                        value={designSettings.gap}
+                        onChange={(e) =>
+                          setDesignSettings({
+                            ...designSettings,
+                            gap: parseInt(e.target.value),
+                          })
+                        }
+                        style={{ width: "100%" }}
+                      />
+                    </s-stack>
+                  </s-box>
+
+                  {/* Padding Vertical */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">
+                        Padding V: {designSettings.paddingTopBottom}px
+                      </s-text>
+                      <input
+                        type="range"
+                        min="0"
+                        max="80"
+                        step="4"
+                        value={designSettings.paddingTopBottom}
+                        onChange={(e) =>
+                          setDesignSettings({
+                            ...designSettings,
+                            paddingTopBottom: parseInt(e.target.value),
+                          })
+                        }
+                        style={{ width: "100%" }}
+                      />
+                    </s-stack>
+                  </s-box>
+
+                  {/* Padding Horizontal */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-text type="strong">
+                        Padding H: {designSettings.paddingLeftRight}px
+                      </s-text>
+                      <input
+                        type="range"
+                        min="0"
+                        max="80"
+                        step="4"
+                        value={designSettings.paddingLeftRight}
+                        onChange={(e) =>
+                          setDesignSettings({
+                            ...designSettings,
+                            paddingLeftRight: parseInt(e.target.value),
+                          })
+                        }
+                        style={{ width: "100%" }}
+                      />
+                    </s-stack>
+                  </s-box>
+
+                  <s-divider />
+
+                  {/* Display Options */}
+                  <s-box>
+                    <s-stack gap="small-200">
+                      <s-clickable
+                        onClick={() =>
+                          setDesignSettings({
+                            ...designSettings,
+                            showHeader: !designSettings.showHeader,
+                          })
+                        }
+                        border="base"
+                        borderRadius="base"
+                        padding="small-200"
+                      >
+                        <s-stack direction="inline" gap="small-200">
+                          <input
+                            type="checkbox"
+                            checked={designSettings.showHeader}
+                            onChange={() => {}}
+                            style={{ width: "18px", height: "18px" }}
+                          />
+                          <s-text type="strong">Show header</s-text>
+                        </s-stack>
+                      </s-clickable>
+
+                      <s-clickable
+                        onClick={() =>
+                          setDesignSettings({
+                            ...designSettings,
+                            showHandle: !designSettings.showHandle,
+                          })
+                        }
+                        border="base"
+                        borderRadius="base"
+                        padding="small-200"
+                      >
+                        <s-stack direction="inline" gap="small-200">
+                          <input
+                            type="checkbox"
+                            checked={designSettings.showHandle}
+                            onChange={() => {}}
+                            style={{ width: "18px", height: "18px" }}
+                          />
+                          <s-text type="strong">Show @handle</s-text>
+                        </s-stack>
+                      </s-clickable>
+                    </s-stack>
+                  </s-box>
+                </s-stack>
+
+                {/* Right Column: Preview */}
+                <s-stack gap="base">
+                  <style>{`
+                    .hide-scrollbar::-webkit-scrollbar {
+                      display: none;
+                    }
+                  `}</style>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-text type="strong">Preview</s-text>
+                    <s-stack direction="inline" gap="small-200">
+                      <s-button
+                        variant={
+                          previewDevice === "desktop" ? "primary" : undefined
+                        }
+                        onClick={() => setPreviewDevice("desktop")}
+                      >
+                        Desktop
+                      </s-button>
+                      <s-button
+                        variant={
+                          previewDevice === "mobile" ? "primary" : undefined
+                        }
+                        onClick={() => setPreviewDevice("mobile")}
+                      >
+                        Mobile
+                      </s-button>
+                    </s-stack>
+                  </s-stack>
+
+                  {/* Preview Container */}
+                  <s-box
+                    background="subdued"
+                    padding="small-200"
+                    borderRadius="base"
+                  >
+                    <div
+                      style={{
+                        background: "white",
+                        borderRadius: "8px",
+                        padding: `${designSettings.paddingTopBottom}px ${designSettings.paddingLeftRight}px`,
+                        maxWidth: previewDevice === "mobile" ? "375px" : "100%",
+                        margin: "0 auto",
+                      }}
+                    >
+                      {/* Header */}
+                      {designSettings.showHeader && (
+                        <div
+                          style={{
+                            fontSize: "18px",
+                            fontWeight: "600",
+                            marginBottom: "12px",
+                            textAlign: "center",
+                            fontFamily: "system-ui, -apple-system, sans-serif",
+                          }}
+                        >
+                          Instagram Feed
+                        </div>
+                      )}
+
+                      {/* Feed Preview */}
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: `${designSettings.gap}px`,
+                          overflowX: "auto",
+                          scrollbarWidth: "none",
+                          msOverflowStyle: "none",
+                          WebkitOverflowScrolling: "touch",
+                        }}
+                        className="hide-scrollbar"
+                      >
+                        {instagramPosts
+                          .slice(0, previewDevice === "desktop" ? 4 : 3)
+                          .map((post: any, index: number) => (
+                            <div
+                              key={post.id}
+                              style={{
+                                position: "relative",
+                                width:
+                                  previewDevice === "desktop"
+                                    ? "140px"
+                                    : "100px",
+                                maxWidth:
+                                  previewDevice === "desktop"
+                                    ? "140px"
+                                    : "100px",
+                                aspectRatio:
+                                  designSettings.aspectRatio === "portrait"
+                                    ? "4/6"
+                                    : "1/1",
+                                borderRadius: `${designSettings.borderRadius}px`,
+                                overflow: "hidden",
+                                flexShrink: 0,
+                                cursor: "pointer",
+                                background: "#111",
+                              }}
+                            >
+                              {/* Image */}
+                              {post.imageUrl && (
+                                <img
+                                  src={post.imageUrl}
+                                  alt="Instagram post"
+                                  style={{
+                                    width: "100%",
+                                    height: "100%",
+                                    objectFit: "cover",
+                                    display: "block",
+                                    maxWidth: "100%",
+                                  }}
+                                />
+                              )}
+
+                              {/* Overlay on hover */}
+                              <div
+                                style={{
+                                  position: "absolute",
+                                  top: 0,
+                                  left: 0,
+                                  width: "100%",
+                                  height: "100%",
+                                  background: "rgba(0, 0, 0, 0.7)",
+                                  opacity: 0,
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  gap: "8px",
+                                  transition: "opacity 240ms ease",
+                                  borderRadius: `${designSettings.borderRadius}px`,
+                                }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.opacity = "1")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.opacity = "0")
+                                }
+                              >
+                                {/* Instagram Icon */}
+                                <svg
+                                  width="32px"
+                                  height="32px"
+                                  fill="#ffffff"
+                                  viewBox="0 0 64 64"
+                                  xmlns="http://www.w3.org/2000/svg"
+                                >
+                                  <path d="M44,57H20A13,13,0,0,1,7,44V20A13,13,0,0,1,20,7H44A13,13,0,0,1,57,20V44A13,13,0,0,1,44,57ZM20,9A11,11,0,0,0,9,20V44A11,11,0,0,0,20,55H44A11,11,0,0,0,55,44V20A11,11,0,0,0,44,9Z"></path>
+                                  <path d="M32,43.67A11.67,11.67,0,1,1,43.67,32,11.68,11.68,0,0,1,32,43.67Zm0-21.33A9.67,9.67,0,1,0,41.67,32,9.68,9.68,0,0,0,32,22.33Z"></path>
+                                  <path d="M44.5,21A3.5,3.5,0,1,1,48,17.5,3.5,3.5,0,0,1,44.5,21Zm0-5A1.5,1.5,0,1,0,46,17.5,1.5,1.5,0,0,0,44.5,16Z"></path>
+                                </svg>
+
+                                {/* Stats */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    gap: "12px",
+                                    color: "white",
+                                    fontSize: "14px",
+                                    alignItems: "center",
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                    }}
+                                  >
+                                    {post.likes || 0}
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="white"
+                                    >
+                                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                                    </svg>
+                                  </span>
+                                  <span
+                                    style={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "6px",
+                                    }}
+                                  >
+                                    {post.comments || 0}
+                                    <svg
+                                      width="16"
+                                      height="16"
+                                      viewBox="0 0 24 24"
+                                      fill="white"
+                                    >
+                                      <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                                    </svg>
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+
+                        {instagramPosts.length === 0 && (
+                          <div
+                            style={{
+                              padding: "20px",
+                              textAlign: "center",
+                              color: "#999",
+                              fontSize: "14px",
+                            }}
+                          >
+                            No posts synced yet
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Instagram Handle */}
+                      {designSettings.showHandle &&
+                        instagramAccount?.username && (
+                          <div
+                            style={{
+                              fontSize: "14px",
+                              fontWeight: "600",
+                              marginTop: "12px",
+                              textAlign: "center",
+                              color: "#666",
+                              fontFamily:
+                                "system-ui, -apple-system, sans-serif",
+                            }}
+                          >
+                            @{instagramAccount.username}
+                          </div>
+                        )}
+                    </div>
+                  </s-box>
+                </s-stack>
+              </div>
+
+              <s-divider />
+
+              {/* Info Banner */}
+              <s-banner tone="info">
+                <s-text>
+                  Configure settings here, then add the block to your theme.
+                  Fine-tune in the theme editor for real-time preview.
+                </s-text>
+              </s-banner>
+            </s-stack>
+          </s-card>
+        </s-section>
+      )}
+
       {/* Delete Success Banner */}
       {deleteMessage && (
         <s-section>
           <s-banner tone="success" onDismiss={() => setDeleteMessage("")}>
             {deleteMessage}
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* Connection Success Banner */}
+      {connectSuccessMessage && (
+        <s-section>
+          <s-banner
+            tone="success"
+            onDismiss={() => setConnectSuccessMessage("")}
+          >
+            {connectSuccessMessage}
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* Sync Success Banner */}
+      {syncSuccessMessage && (
+        <s-section>
+          <s-banner tone="success" onDismiss={() => setSyncSuccessMessage("")}>
+            <s-stack gap="small-200">
+              <s-text type="strong">✓ {syncSuccessMessage}</s-text>
+              {syncStats.postsCount > 0 && (
+                <s-stack direction="inline" gap="small-200">
+                  <s-text>📸 {syncStats.postsCount} posts synced</s-text>
+                  <s-text>
+                    🖼️ {syncStats.filesCount} media files uploaded
+                  </s-text>
+                </s-stack>
+              )}
+              <s-text color="subdued">
+                Your Instagram content is now available in Shopify and ready to
+                display on your store.
+              </s-text>
+            </s-stack>
           </s-banner>
         </s-section>
       )}
@@ -754,83 +1350,81 @@ export default function Index() {
       {isConnected && instagramAccount ? (
         <>
           <s-section>
-            <s-card>
-              <s-stack gap="small-100">
-                <s-heading>Sync Statistics</s-heading>
+            <s-stack gap="small-100">
+              <s-heading>Sync Statistics</s-heading>
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gap: "16px",
-                  }}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "16px",
+                }}
+              >
+                {/* Posts Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/metaobjects/entries/instagram-post`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
                 >
-                  {/* Posts Card */}
-                  <s-clickable
-                    href={`https://admin.shopify.com/store/${shop.replace(
-                      ".myshopify.com",
-                      "",
-                    )}/content/metaobjects/entries/instagram-post`}
-                    target="_blank"
-                    border="base"
-                    borderRadius="base"
-                    padding="base"
-                  >
-                    <s-stack gap="small-200">
-                      <s-icon type="social-post" tone="info" />
-                      <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                        {syncStats.postsCount}
-                      </div>
-                      <s-text color="subdued">Posts Synced</s-text>
-                    </s-stack>
-                  </s-clickable>
+                  <s-stack gap="small-200">
+                    <s-icon type="social-post" tone="info" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.postsCount}
+                    </div>
+                    <s-text color="subdued">Posts Synced</s-text>
+                  </s-stack>
+                </s-clickable>
 
-                  {/* Files Card */}
-                  <s-clickable
-                    href={`https://admin.shopify.com/store/${shop.replace(
-                      ".myshopify.com",
-                      "",
-                    )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=${instagramAccount.username}-post-`}
-                    target="_blank"
-                    border="base"
-                    borderRadius="base"
-                    padding="base"
-                  >
-                    <s-stack gap="small-200">
-                      <s-icon type="image" tone="success" />
-                      <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                        {syncStats.filesCount}
-                      </div>
-                      <s-text color="subdued">Files Created</s-text>
-                    </s-stack>
-                  </s-clickable>
+                {/* Files Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=${instagramAccount.username}-post-`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
+                >
+                  <s-stack gap="small-200">
+                    <s-icon type="image" tone="success" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.filesCount}
+                    </div>
+                    <s-text color="subdued">Files Created</s-text>
+                  </s-stack>
+                </s-clickable>
 
-                  {/* Metaobjects Card */}
-                  <s-clickable
-                    href={`https://admin.shopify.com/store/${shop.replace(
-                      ".myshopify.com",
-                      "",
-                    )}/content/metaobjects`}
-                    target="_blank"
-                    border="base"
-                    borderRadius="base"
-                    padding="base"
-                  >
-                    <s-stack gap="small-200">
-                      <s-icon type="file" tone="warning" />
-                      <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                        {syncStats.metaobjectsCount}
-                      </div>
-                      <s-text color="subdued">Metaobjects</s-text>
-                    </s-stack>
-                  </s-clickable>
-                </div>
-              </s-stack>
-            </s-card>
-            <s-banner tone="info">
-              Click the statistics cards above to view your metaobjects in
-              Shopify admin and explore all fields.
-            </s-banner>
+                {/* Metaobjects Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/metaobjects`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
+                >
+                  <s-stack gap="small-200">
+                    <s-icon type="file" tone="warning" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.metaobjectsCount}
+                    </div>
+                    <s-text color="subdued">Metaobjects</s-text>
+                  </s-stack>
+                </s-clickable>
+              </div>
+              <s-banner tone="info">
+                Click the statistics cards above to view your metaobjects in
+                Shopify admin and explore all fields.
+              </s-banner>
+            </s-stack>
           </s-section>
 
           {/* Theme Snippets Download Section */}
@@ -922,6 +1516,116 @@ export default function Index() {
         <>
           <s-text>No Instagram account connected</s-text>
         </>
+      )}
+
+      {/* Connection Explanation Modal - Using overlay approach */}
+      {showConnectModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowConnectModal(false)}
+        >
+          <div
+            style={{
+              maxWidth: "600px",
+              width: "90%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <s-card>
+              <s-box padding="base">
+                <s-stack gap="base">
+                  <s-stack gap="small-200">
+                    <s-heading>Connect Instagram Account</s-heading>
+                    <s-text>
+                      You will be redirected to Instagram to complete the
+                      following steps:
+                    </s-text>
+                  </s-stack>
+
+                  <s-box
+                    padding="base"
+                    background="subdued"
+                    borderRadius="base"
+                  >
+                    <s-stack gap="small-400">
+                      <s-stack direction="inline" gap="small-200">
+                        <s-icon type="lock" tone="info" />
+                        <s-text type="strong">
+                          1. Log in with your Instagram account
+                        </s-text>
+                      </s-stack>
+                      <s-text color="subdued">
+                        Enter your Instagram username and password (or use
+                        existing session)
+                      </s-text>
+
+                      <s-divider />
+
+                      <s-stack direction="inline" gap="small-200">
+                        <s-icon type="check-circle" tone="success" />
+                        <s-text type="strong">
+                          2. Grant permission to access your data
+                        </s-text>
+                      </s-stack>
+                      <s-text color="subdued">
+                        Allow access to your Instagram posts and profile
+                        information
+                      </s-text>
+
+                      <s-divider />
+
+                      <s-stack direction="inline" gap="small-200">
+                        <s-icon type="arrow-right" tone="info" />
+                        <s-text type="strong">
+                          3. Return to this dashboard
+                        </s-text>
+                      </s-stack>
+                      <s-text color="subdued">
+                        You'll be redirected back here to complete setup
+                      </s-text>
+                    </s-stack>
+                  </s-box>
+
+                  <s-banner tone="info">
+                    <s-stack gap="small-100">
+                      <s-text type="strong">Required Permissions:</s-text>
+                      <s-text>
+                        • <strong>instagram_basic:</strong> Access your
+                        Instagram posts and profile information
+                      </s-text>
+                      <s-text color="subdued">
+                        These permissions allow us to display your Instagram
+                        content on your Shopify store.
+                      </s-text>
+                    </s-stack>
+                  </s-banner>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-button variant="primary" onClick={handleConfirmConnect}>
+                      Continue to Instagram
+                    </s-button>
+                    <s-button onClick={() => setShowConnectModal(false)}>
+                      Cancel
+                    </s-button>
+                  </s-stack>
+                </s-stack>
+              </s-box>
+            </s-card>
+          </div>
+        </div>
       )}
     </s-page>
   );

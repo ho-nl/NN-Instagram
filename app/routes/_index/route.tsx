@@ -23,8 +23,9 @@ export default function App() {
       <div className={styles.content}>
         <h1 className={styles.heading}>Near Native Instagram</h1>
         <p className={styles.text}>
-          Store Instagram posts as Shopify metaobjects to create your own
-          Instagram feed in Liquid templates.
+          A developer-focused app that syncs Instagram posts to Shopify
+          metaobjects, giving you complete control to build custom Instagram
+          feeds using Liquid templates.
         </p>
         {showForm && (
           <Form className={styles.form} method="post" action="/auth/login">
@@ -40,18 +41,26 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Shopify-native storage.</strong> Store Instagram posts as
-            Shopify metaobjects to create your own Instagram feed in Liquid
-            templates.
+            <strong>Built for Developers.</strong> No pre-built UI components.
+            This app syncs Instagram data to Shopify metaobjects, giving you
+            complete freedom to build custom Instagram feeds with your own
+            design and functionality.
           </li>
           <li>
-            <strong>Seamless integration.</strong> Easily integrate Instagram
-            content into your Shopify store without any complex setup.
+            <strong>Native Shopify Storage.</strong> Instagram posts stored as
+            metaobjects with full access via Liquid templates. Query and display
+            your Instagram content using standard Shopify APIs - no external
+            dependencies.
           </li>
           <li>
-            <strong>Downloadable Liquid files for Instagram feed</strong>. Get
-            pre-built Liquid files to easily display your Instagram feed on your
-            Shopify store.
+            <strong>Starter Liquid Templates Included.</strong> Get reference
+            Liquid files as a starting point. Customize them completely or build
+            your own from scratch using the metaobject data structure.
+          </li>
+          <li>
+            <strong>Full Data Access.</strong> Every Instagram post includes:
+            images, captions, likes, comments, timestamps, and permalinks - all
+            accessible through Shopify's metaobject API for maximum flexibility.
           </li>
         </ul>
       </div>

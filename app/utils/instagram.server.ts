@@ -380,3 +380,93 @@ function checkForAppBlock(content: string | { sections?: Record<string, unknown>
   return appBlockRegex.test(contentStr);
 }
 
+/**
+ * Get Instagram posts for preview
+ */
+export async function getInstagramPostsForPreview(admin: ShopifyAdmin, limit: number = 12) {
+  try {
+    const query = await admin.graphql(`#graphql
+      query GetInstagramPosts($limit: Int!) {
+        metaobjects(type: "instagram-post", first: $limit) {
+          nodes {
+            id
+            handle
+            fields {
+              key
+              value
+              reference {
+                ... on MediaImage {
+                  id
+                  image {
+                    url
+                    altText
+                  }
+                }
+              }
+              references(first: 10) {
+                nodes {
+                  ... on MediaImage {
+                    id
+                    image {
+                      url
+                      altText
+                    }
+                  }
+                  ... on Video {
+                    id
+                    sources {
+                      url
+                      mimeType
+                    }
+                    preview {
+                      image {
+                        url
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `, {
+      variables: {
+        limit: limit
+      }
+    });
+    
+    const data = await query.json();
+    const posts = data.data?.metaobjects?.nodes || [];
+    
+    return posts.map((post: any) => {
+      const fields = post.fields.reduce((acc: any, field: any) => {
+        acc[field.key] = field;
+        return acc;
+      }, {});
+      
+      // Get images from references
+      const images = fields.images?.references?.nodes || [];
+      const firstImage = images[0];
+      
+      // For videos, use the preview image; for images, use the image URL
+      const imageUrl = firstImage?.sources 
+        ? firstImage?.preview?.image?.url || "" 
+        : firstImage?.image?.url || "";
+      
+      return {
+        id: post.id,
+        handle: post.handle,
+        caption: fields.caption?.value || "",
+        likes: parseInt(fields.likes?.value || "0"),
+        comments: parseInt(fields.comments?.value || "0"),
+        imageUrl: imageUrl,
+        mediaType: firstImage?.sources ? "video" : "image",
+      };
+    });
+  } catch (error) {
+    console.error("Error fetching Instagram posts for preview:", error);
+    return [];
+  }
+}
+

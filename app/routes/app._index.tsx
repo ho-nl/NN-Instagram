@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, useLoaderData, useNavigate } from "react-router";
 import { AppProvider } from "@shopify/shopify-app-react-router/react";
 import { authenticate } from "../shopify.server";
+import { useEffect } from "react";
 
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import type { HeadersFunction } from "react-router";
@@ -269,6 +270,47 @@ export default function Index() {
   const isSetupComplete =
     (existsList || createdList) && (existsPost || createdPost);
   const hasErrors = errors && errors.length > 0;
+  const isLoading = !isSetupComplete && !hasErrors;
+
+  // Auto-refresh while loading (check every 3 seconds)
+  useEffect(() => {
+    if (isLoading) {
+      const timer = setTimeout(() => {
+        window.location.reload();
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading]);
+
+  // If still loading/creating metaobjects, show loading state
+  if (isLoading) {
+    return (
+      <AppProvider embedded apiKey={apiKey}>
+        <Outlet />
+        <s-page>
+          <s-section>
+            <s-stack gap="base" alignItems="center">
+              <s-spinner size="large" />
+              <s-heading>Setting up NN Instagram...</s-heading>
+              <s-text>
+                Creating required metaobject definitions. This will only take a
+                few seconds.
+              </s-text>
+              <s-box padding="base">
+                <s-button
+                  onClick={() => window.location.reload()}
+                  variant="secondary"
+                >
+                  Refresh Page
+                </s-button>
+              </s-box>
+            </s-stack>
+          </s-section>
+        </s-page>
+      </AppProvider>
+    );
+  }
 
   return (
     <AppProvider embedded apiKey={apiKey}>
@@ -285,8 +327,9 @@ export default function Index() {
                   <s-heading>NN Instagram</s-heading>
 
                   <s-text>
-                    Sync your Instagram posts to Shopify and display them
-                    beautifully on your store
+                    Developer-focused app that syncs Instagram posts to Shopify
+                    metaobjects. Build custom Instagram feeds with complete
+                    design freedom using Liquid templates.
                   </s-text>
                 </s-stack>
               </s-section>
@@ -296,18 +339,19 @@ export default function Index() {
                 <s-heading>About the App</s-heading>
                 <s-stack gap="small">
                   <s-text>
-                    Instagram Feed Sync - Seamlessly integrate your Instagram
-                    content with Shopify
+                    Instagram Feed Sync for Developers - Raw data access to
+                    build custom Instagram integrations
                   </s-text>
 
                   <s-divider />
 
                   <s-heading>What does this app do?</s-heading>
                   <s-text>
-                    This app automatically syncs your Instagram posts to your
-                    Shopify store, storing them as metaobjects and files. You
-                    can then display your Instagram feed anywhere on your store
-                    using Liquid code or theme blocks.
+                    This app syncs your Instagram posts to Shopify as native
+                    metaobjects and files, giving developers complete control to
+                    build custom Instagram feeds. No pre-built UI - you design
+                    and code your own Instagram feed using Liquid templates and
+                    Shopify's standard APIs.
                   </s-text>
                   <s-divider />
                   <s-stack gap="small-200">
@@ -318,19 +362,21 @@ export default function Index() {
                           Instagram Business or Creator account
                         </s-list-item>
                         <s-list-item>
-                          Facebook Page connected to Instagram
+                          Shopify plan that supports metaobjects
                         </s-list-item>
                         <s-list-item>
-                          Shopify plan that supports metaobjects
+                          Liquid/theme development knowledge to build custom
+                          feeds
                         </s-list-item>
                       </s-unordered-list>
                     </s-stack>
                     <s-banner tone="info">
                       <s-stack gap="small-200">
-                        <s-text type="strong">Need help?</s-text>
+                        <s-text type="strong">For Developers</s-text>
                         <s-text>
-                          Visit our documentation or contact support for
-                          assistance with setup and customization.
+                          This app provides raw Instagram data as metaobjects.
+                          You'll need to write Liquid code to display the data.
+                          Starter templates are provided as reference.
                         </s-text>
                       </s-stack>
                     </s-banner>
@@ -347,19 +393,43 @@ export default function Index() {
                     {isSetupComplete && !hasErrors && (
                       <s-badge tone="success">Ready</s-badge>
                     )}
+                    {!isSetupComplete && !hasErrors && (
+                      <s-badge tone="info">Setting Up</s-badge>
+                    )}
                     {hasErrors && (
                       <s-badge tone="critical">Action Required</s-badge>
                     )}
                   </s-stack>
 
+                  {/* First Install - In Progress Banner */}
+                  {!isSetupComplete && !hasErrors && (
+                    <s-banner tone="info">
+                      <s-stack gap="small-200">
+                        <s-text type="strong">🔧 Setting up your app...</s-text>
+                        <s-text>
+                          The app is automatically creating the required Shopify
+                          metaobject definitions. This is a one-time setup that
+                          happens when you first install the app.
+                        </s-text>
+                        <s-text color="subdued">
+                          This usually takes just a few seconds. Refresh the
+                          page if the setup doesn't complete automatically.
+                        </s-text>
+                      </s-stack>
+                    </s-banner>
+                  )}
+
                   {/* Success Banner */}
                   {isSetupComplete && !hasErrors && (
                     <s-banner tone="success">
                       <s-stack gap="small-200">
-                        <s-text type="strong">The app is ready to use!</s-text>
+                        <s-text type="strong">
+                          ✓ The app is ready to use!
+                        </s-text>
                         <s-text>
                           All required metaobject definitions have been created
-                          successfully.
+                          successfully. You can now connect your Instagram
+                          account and start syncing posts.
                         </s-text>
                       </s-stack>
                     </s-banner>
@@ -369,10 +439,15 @@ export default function Index() {
                   {hasErrors && (
                     <s-banner tone="critical">
                       <s-stack gap="small-200">
-                        <s-text type="strong">Setup encountered errors</s-text>
+                        <s-text type="strong">
+                          <s-icon type="alert-circle" tone="critical" />
+                          Setup encountered errors
+                        </s-text>
                         <s-text>
-                          Please check the details below and contact support if
-                          the issue persists.
+                          The metaobject definitions could not be created
+                          automatically. Please check the details below. You may
+                          need to refresh the page or contact support if the
+                          issue persists.
                         </s-text>
                       </s-stack>
                     </s-banner>
@@ -384,40 +459,112 @@ export default function Index() {
                   <s-stack gap="base">
                     <s-heading>Metaobject Definitions</s-heading>
 
+                    {!isSetupComplete && !hasErrors && (
+                      <s-text color="subdued">
+                        Creating required metaobject definitions for Instagram
+                        data storage...
+                      </s-text>
+                    )}
+
                     {/* Instagram Post Status */}
-                    <s-stack gap="small-200" direction="inline">
-                      {(existsPost || createdPost) && !hasErrors ? (
-                        <s-icon type="check-circle" tone="success" />
-                      ) : (
-                        <s-icon type="alert-circle" tone="critical" />
-                      )}
-                      <s-stack gap="small-100">
-                        <s-text type="strong">Instagram Post</s-text>
-                        <s-text color="subdued">
-                          {createdPost && "Created during setup"}
-                          {existsPost && !createdPost && "Already configured"}
-                          {!existsPost && !createdPost && "Not configured"}
-                        </s-text>
+                    <s-box
+                      padding="base"
+                      background="subdued"
+                      borderRadius="base"
+                    >
+                      <s-stack gap="small-200" direction="inline">
+                        {(existsPost || createdPost) && !hasErrors ? (
+                          <s-icon type="check-circle" tone="success" />
+                        ) : (
+                          <s-icon
+                            type="alert-circle"
+                            tone={hasErrors ? "critical" : "info"}
+                          />
+                        )}
+                        <s-stack gap="small-100">
+                          <s-text type="strong">Instagram Post</s-text>
+                          <s-text color="subdued">
+                            {createdPost && "✓ Created during setup"}
+                            {existsPost &&
+                              !createdPost &&
+                              "✓ Already configured"}
+                            {!existsPost &&
+                              !createdPost &&
+                              !hasErrors &&
+                              "⏳ Creating..."}
+                            {!existsPost &&
+                              !createdPost &&
+                              hasErrors &&
+                              "✗ Failed to create"}
+                          </s-text>
+                        </s-stack>
                       </s-stack>
-                    </s-stack>
+                    </s-box>
 
                     {/* Instagram List Status */}
-                    <s-stack gap="small-200" direction="inline">
-                      {(existsList || createdList) && !hasErrors ? (
-                        <s-icon type="check-circle" tone="success" />
-                      ) : (
-                        <s-icon type="alert-circle" tone="critical" />
-                      )}
-                      <s-stack gap="small-100">
-                        <s-text type="strong">Instagram List</s-text>
+                    <s-box
+                      padding="base"
+                      background="subdued"
+                      borderRadius="base"
+                    >
+                      <s-stack gap="small-200" direction="inline">
+                        {(existsList || createdList) && !hasErrors ? (
+                          <s-icon type="check-circle" tone="success" />
+                        ) : (
+                          <s-icon
+                            type="alert-circle"
+                            tone={hasErrors ? "critical" : "info"}
+                          />
+                        )}
+                        <s-stack gap="small-100">
+                          <s-text type="strong">Instagram List</s-text>
+                          <s-text color="subdued">
+                            {createdList && "✓ Created during setup"}
+                            {existsList &&
+                              !createdList &&
+                              "✓ Already configured"}
+                            {!existsList &&
+                              !createdList &&
+                              !hasErrors &&
+                              "⏳ Creating..."}
+                            {!existsList &&
+                              !createdList &&
+                              hasErrors &&
+                              "✗ Failed to create"}
+                          </s-text>
+                        </s-stack>
+                      </s-stack>
+                    </s-box>
+
+                    {!isSetupComplete && !hasErrors && (
+                      <s-banner tone="info">
+                        <s-text>
+                          These metaobject definitions store your Instagram
+                          posts as native Shopify data, accessible via Liquid
+                          templates.
+                        </s-text>
+                      </s-banner>
+                    )}
+                  </s-stack>
+
+                  {/* Refresh button for setup in progress */}
+                  {!isSetupComplete && !hasErrors && (
+                    <>
+                      <s-divider />
+                      <s-stack gap="small-200">
+                        <s-button
+                          onClick={() => window.location.reload()}
+                          variant="secondary"
+                        >
+                          Refresh to Check Status
+                        </s-button>
                         <s-text color="subdued">
-                          {createdList && "Created during setup"}
-                          {existsList && !createdList && "Already configured"}
-                          {!existsList && !createdList && "Not configured"}
+                          Click refresh if the setup doesn't complete
+                          automatically
                         </s-text>
                       </s-stack>
-                    </s-stack>
-                  </s-stack>
+                    </>
+                  )}
 
                   {/* Error Details */}
                   {hasErrors && (
@@ -430,13 +577,19 @@ export default function Index() {
                             • {err}
                           </s-text>
                         ))}
+                        <s-button
+                          onClick={() => window.location.reload()}
+                          variant="primary"
+                        >
+                          Retry Setup
+                        </s-button>
                       </s-stack>
                     </>
                   )}
                   <s-divider />
                 </s-stack>
 
-                {/* Next Steps */}
+                {/* Next Steps - Only show when setup is complete */}
                 {isSetupComplete && !hasErrors && (
                   <s-section>
                     <s-stack gap="base">
@@ -446,23 +599,25 @@ export default function Index() {
                         <s-stack gap="small-100">
                           <s-text type="strong">1. Connect Your Account</s-text>
                           <s-text color="subdued">
-                            Head to the dashboard and connect your Instagram
-                            Business account
+                            Authenticate with Instagram OAuth and grant
+                            permissions to access your posts
                           </s-text>
                         </s-stack>
 
                         <s-stack gap="small-100">
                           <s-text type="strong">2. Sync Your Posts</s-text>
                           <s-text color="subdued">
-                            Import your Instagram posts with one click
+                            Import Instagram data as Shopify metaobjects with
+                            one click
                           </s-text>
                         </s-stack>
 
                         <s-stack gap="small-100">
-                          <s-text type="strong">3. Add to Your Theme</s-text>
+                          <s-text type="strong">3. Build Your Feed</s-text>
                           <s-text color="subdued">
-                            Display your Instagram feed on any page of your
-                            store
+                            Use Liquid templates to create custom Instagram
+                            feeds with your own design. Starter templates
+                            provided as reference.
                           </s-text>
                         </s-stack>
                       </s-stack>
@@ -488,32 +643,32 @@ export default function Index() {
 
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
+                    <s-text>Your Instagram data in metaobjects</s-text>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="check-circle" tone="success" />
+                    <s-text>Build custom feeds in Liquid</s-text>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="check-circle" tone="success" />
+                    <s-text>Complete design control</s-text>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="check-circle" tone="success" />
+                    <s-text>Media files stored in Shopify CDN</s-text>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="check-circle" tone="success" />
                     <s-text>Automatic sync every 24 hours</s-text>
                   </s-stack>
 
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
-                    <s-text>Manual sync on demand</s-text>
-                  </s-stack>
-
-                  <s-stack direction="inline" gap="small-200">
-                    <s-icon type="check-circle" tone="success" />
-                    <s-text>Stores posts as metaobjects</s-text>
-                  </s-stack>
-
-                  <s-stack direction="inline" gap="small-200">
-                    <s-icon type="check-circle" tone="success" />
-                    <s-text>Uploads media to Shopify files</s-text>
-                  </s-stack>
-
-                  <s-stack direction="inline" gap="small-200">
-                    <s-icon type="check-circle" tone="success" />
-                    <s-text>Easy theme integration</s-text>
-                  </s-stack>
-
-                  <s-stack direction="inline" gap="small-200">
-                    <s-icon type="check-circle" tone="success" />
-                    <s-text>No coding required</s-text>
+                    <s-text>Starter Liquid templates included</s-text>
                   </s-stack>
                 </s-stack>
               </s-section>
@@ -524,17 +679,18 @@ export default function Index() {
                   <s-heading>How it works</s-heading>
                   <s-ordered-list>
                     <s-list-item>
-                      Connect your Instagram Business account
+                      Connect your Instagram Business account via OAuth
                     </s-list-item>
                     <s-list-item>
-                      Sync your posts to create metaobjects and files in Shopify
+                      Sync posts to create metaobjects with full post data
+                      (images, captions, likes, comments, permalinks)
                     </s-list-item>
                     <s-list-item>
-                      Add the Instagram feed to your store pages using theme
-                      blocks
+                      Build your own custom Instagram feed using Liquid
+                      templates and the metaobject data
                     </s-list-item>
                     <s-list-item>
-                      Your feed updates automatically every 24 hours
+                      Data automatically updates every 24 hours or on-demand
                     </s-list-item>
                   </s-ordered-list>
                 </s-stack>
