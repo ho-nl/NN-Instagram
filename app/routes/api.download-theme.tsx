@@ -6,21 +6,6 @@ const GITHUB_REPO = "mohamedamezian/NN-Instagram-Carousel";
 const GITHUB_API = "https://api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // Optional
 
-interface GitHubTreeItem {
-  path: string;
-  type: "blob" | "tree";
-  sha: string;
-  url: string;
-}
-
-interface GitHubTree {
-  tree: GitHubTreeItem[];
-}
-
-interface RepoData {
-  default_branch: string;
-}
-
 function isInstagramFile(filePath: string): boolean {
   return filePath.toLowerCase().includes("instagram");
 }
@@ -139,7 +124,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Create a promise to collect all chunks
     const zipPromise = new Promise<Buffer>((resolve, reject) => {
       const chunks: Buffer[] = [];
-      
+
       archive.on("data", (chunk: Buffer) => {
         chunks.push(chunk);
       });

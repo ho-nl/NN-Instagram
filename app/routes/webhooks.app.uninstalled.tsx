@@ -21,7 +21,9 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         }
       `);
         const filesJson = await filesQuery.json();
-        const fileIds = filesJson.data.files.edges.map((e: any) => e.node.id);
+        const fileIds = filesJson.data.files.edges.map(
+          (e: { node: { id: string } }) => e.node.id,
+        );
 
         if (fileIds.length > 0) {
           await admin.graphql(
@@ -57,7 +59,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
         // Find and delete instagram-post and instagram-list definitions
         const instagramDefinitions = definitions.filter(
-          (def: any) =>
+          (def: { type: string }) =>
             def.type === "instagram-post" || def.type === "instagram-list",
         );
 

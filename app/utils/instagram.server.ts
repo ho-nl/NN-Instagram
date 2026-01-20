@@ -3,6 +3,7 @@
  */
 
 import type { InstagramAccount, SyncStats } from "../types/instagram.types";
+import type { ShopifyAdmin, MetaobjectsQueryResponse, FilesQueryResponse } from "../types/shopify.types";
 
 /**
  * Fetch Instagram profile information from Graph API
@@ -31,7 +32,7 @@ export async function getInstagramProfile(
 /**
  * Get sync statistics from Shopify metaobjects and files
  */
-export async function getSyncStats(admin: any): Promise<SyncStats> {
+export async function getSyncStats(admin: ShopifyAdmin): Promise<SyncStats> {
   try {
     // Count instagram-post metaobjects (all accounts)
     const postsCountQuery = await admin.graphql(`#graphql
@@ -75,11 +76,11 @@ export async function getSyncStats(admin: any): Promise<SyncStats> {
         }
       }
     `);
-    const filesCountData = await filesCountQuery.json();
+    const filesCountData = await filesCountQuery.json() as FilesQueryResponse;
 
     // Filter files to only those with pattern: {username}-post_
     const instagramFiles =
-      filesCountData.data?.files?.edges?.filter((edge: any) =>
+      filesCountData.data?.files?.edges?.filter((edge) =>
         edge.node.alt?.includes("-post_"),
       ) || [];
 
@@ -111,7 +112,7 @@ export async function getSyncStats(admin: any): Promise<SyncStats> {
  * Get available theme pages/templates
  */
 export async function getThemePages(
-  admin: any,
+  admin: ShopifyAdmin,
 ): Promise<Array<{ label: string; value: string }>> {
   try {
     // Get the published theme
@@ -158,7 +159,7 @@ export async function getThemePages(
  * The UI can guide users to add the block via theme editor links
  */
 export async function checkAppBlockInstallation(
-  admin: any,
+  admin: ShopifyAdmin,
 ): Promise<Record<string, boolean>> {
   const installationStatus: Record<string, boolean> = {};
 
@@ -194,7 +195,7 @@ export async function checkAppBlockInstallation(
     let cursor: string | null = null;
 
     while (hasNextPage) {
-      const filesQuery: any = await admin.graphql(`
+      const filesQuery = await admin.graphql(`
         #graphql
         query ThemeFilesForBlocks($themeId: ID!, $after: String) {
           theme(id: $themeId) {
@@ -229,9 +230,25 @@ export async function checkAppBlockInstallation(
         },
       });
 
-      const filesData: any = await filesQuery.json();
+      const filesData = await filesQuery.json() as {
+        data?: {
+          theme?: {
+            files?: {
+              edges: Array<{
+                cursor: string;
+                node: {
+                  filename: string;
+                  contentType: string;
+                  body?: { content?: string };
+                };
+              }>;
+              pageInfo: { hasNextPage: boolean; endCursor: string };
+            };
+          };
+        };
+      };
       const edges = filesData.data?.theme?.files?.edges || [];
-      const pageInfo: any = filesData.data?.theme?.files?.pageInfo;
+      const pageInfo = filesData.data?.theme?.files?.pageInfo;
 
       console.log(`📦 Fetched ${edges.length} theme files...`);
 
@@ -324,7 +341,18 @@ export async function checkAppBlockInstallation(
 /**
  * Helper function to check if content contains our app block
  */
-function checkForAppBlock(content: any): boolean {
+function checkForAppBlock(content: string | { sections?: Record<string, unknown> }): boolean {
+  // If content is a string (Liquid file or unparsed JSON), search as string
+  if (typeof content === 'string') {
+    const patterns = [
+      'instagram-feed',
+      'instagram_feed',
+      'app--',
+    ];
+    return patterns.some(pattern => content.includes(pattern));
+  }
+  
+  // If content is parsed JSON object
   if (!content || !content.sections) {
     return false;
   }

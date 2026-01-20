@@ -3,8 +3,9 @@
  */
 
 import type { ActionResponse } from "../types/instagram.types";
+import type { ShopifyAdmin } from "../types/shopify.types";
 import { deleteInstagramData, generateAppEmbedUrl } from "./metaobjects.server";
-import prisma from "../db.server";
+import { deleteInstagramAccount } from "./account.server";
 
 /**
  * Handle sync action - trigger Instagram sync
@@ -36,7 +37,7 @@ export async function handleSyncAction(request: Request): Promise<ActionResponse
 /**
  * Handle delete data action - delete all Instagram metaobjects and files
  */
-export async function handleDeleteDataAction(admin: any): Promise<ActionResponse> {
+export async function handleDeleteDataAction(admin: ShopifyAdmin): Promise<ActionResponse> {
   return await deleteInstagramData(admin);
 }
 
@@ -44,7 +45,7 @@ export async function handleDeleteDataAction(admin: any): Promise<ActionResponse
  * Handle disconnect action - delete data and remove social account
  */
 export async function handleDisconnectAction(
-  admin: any,
+  admin: ShopifyAdmin,
   shop: string,
 ): Promise<ActionResponse> {
   try {
@@ -55,15 +56,8 @@ export async function handleDisconnectAction(
       return deleteResult;
     }
 
-    // Then remove the social account connection
-    await prisma.socialAccount.delete({
-      where: {
-        shop_provider: {
-          shop,
-          provider: "instagram",
-        },
-      },
-    });
+    // Then remove the social account connection using centralized function
+    await deleteInstagramAccount(shop);
 
     console.log(
       `✓ Disconnected account and deleted ${deleteResult.deletedMetaobjects} metaobjects and ${deleteResult.deletedFiles} files`,

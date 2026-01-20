@@ -22,7 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     console.log("📊 Found tokens:", currentIgToken.length);
     console.log(
       "🔍 Tokens found:",
-      currentIgToken.map((t: any) => ({
+      currentIgToken.map((t) => ({
         id: t.id,
         shop: t.shop,
         createdAt: t.createdAt,

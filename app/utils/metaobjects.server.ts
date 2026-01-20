@@ -3,11 +3,18 @@
  */
 
 import type { ActionResponse } from "../types/instagram.types";
+import type { 
+  ShopifyAdmin, 
+  MetaobjectsQueryResponse, 
+  FilesQueryResponse,
+  GraphQLNode,
+  FileNode 
+} from "../types/shopify.types";
 
 /**
  * Delete all Instagram metaobjects (posts and list)
  */
-async function deleteMetaobjects(admin: any): Promise<{
+async function deleteMetaobjects(admin: ShopifyAdmin): Promise<{
   postIds: string[];
   listIds: string[];
 }> {
@@ -20,10 +27,10 @@ async function deleteMetaobjects(admin: any): Promise<{
       }
     }
   `);
-  const postMetaobjectsJson = await postMetaobjectsQuery.json();
+  const postMetaobjectsJson = await postMetaobjectsQuery.json() as MetaobjectsQueryResponse;
   const postMetaobjectIds =
     postMetaobjectsJson.data?.metaobjects?.edges?.map(
-      (e: any) => e.node.id,
+      (e) => e.node.id,
     ) || [];
 
   // Query instagram_list metaobjects
@@ -35,10 +42,10 @@ async function deleteMetaobjects(admin: any): Promise<{
       }
     }
   `);
-  const listMetaobjectsJson = await listMetaobjectsQuery.json();
+  const listMetaobjectsJson = await listMetaobjectsQuery.json() as MetaobjectsQueryResponse;
   const listMetaobjectIds =
     listMetaobjectsJson.data?.metaobjects?.edges?.map(
-      (e: any) => e.node.id,
+      (e) => e.node.id,
     ) || [];
 
   // Delete all metaobjects
@@ -66,33 +73,64 @@ async function deleteMetaobjects(admin: any): Promise<{
 /**
  * Delete Instagram files from Shopify
  */
-async function deleteInstagramFiles(admin: any): Promise<string[]> {
-  // Query files with instagram-post_ prefix in alt text
-  const filesQuery = await admin.graphql(`
-    #graphql
-    query {
-      files(first: 250, query: "alt:instagram-post_") {
-        edges { 
-          node { 
-            id 
-            alt
-          } 
+async function deleteInstagramFiles(admin: ShopifyAdmin): Promise<string[]> {
+  let allFileIds: string[] = [];
+  let hasNextPage = true;
+  let endCursor: string | null = null;
+
+  // Paginate through all files to find Instagram files
+  while (hasNextPage) {
+    const filesQuery = await admin.graphql(`
+      #graphql
+      query($cursor: String) {
+        files(first: 250, after: $cursor) {
+          edges { 
+            node { 
+              id 
+              alt
+            } 
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
-    }
-  `);
-  const filesJson = await filesQuery.json();
+    `, { variables: { cursor: endCursor } });
+    
+    const filesJson = await filesQuery.json() as FilesQueryResponse;
 
-  // Filter to ONLY files with alt text starting with "instagram-post_"
-  const instagramFiles =
-    filesJson.data?.files?.edges?.filter((edge: any) =>
-      edge.node.alt?.startsWith("instagram-post_"),
-    ) || [];
+    // Filter files with alt text matching Instagram post pattern: {username}-post_{id}
+    // Pattern: anything-post_ (includes both old instagram-post_ and new username-post_ formats)
+    const instagramFiles =
+      filesJson.data?.files?.edges?.filter((edge) => {
+        const alt = edge.node.alt || "";
+        const isInstagramFile = alt.includes("-post_");
+        if (isInstagramFile) {
+          console.log(`  ✓ Matched: ${alt}`);
+        }
+        return isInstagramFile;
+      }) || [];
 
-  const fileIds = instagramFiles.map((edge: any) => edge.node.id);
+    const pageFileIds = instagramFiles.map((edge) => edge.node.id);
+    allFileIds = [...allFileIds, ...pageFileIds];
+    
+    console.log(`📄 Page ${endCursor || "1"}: Found ${pageFileIds.length} Instagram files`);
 
-  if (fileIds.length > 0) {
-    await admin.graphql(
+    hasNextPage = filesJson.data?.files?.pageInfo?.hasNextPage || false;
+    endCursor = filesJson.data?.files?.pageInfo?.endCursor || null;
+  }
+
+  console.log(`🗑️ Found ${allFileIds.length} Instagram files to delete`);
+
+  // Delete files in batches of 250 (Shopify limit)
+  const batches = [];
+  for (let i = 0; i < allFileIds.length; i += 250) {
+    batches.push(allFileIds.slice(i, i + 250));
+  }
+
+  for (const batch of batches) {
+    const deleteResponse = await admin.graphql(
       `
       #graphql
       mutation fileDelete($fileIds: [ID!]!) {
@@ -102,17 +140,32 @@ async function deleteInstagramFiles(admin: any): Promise<string[]> {
         }
       }
     `,
-      { variables: { fileIds } },
+      { variables: { fileIds: batch } },
     );
+
+    const deleteJson = await deleteResponse.json() as { 
+      data?: { 
+        fileDelete?: { 
+          deletedFileIds: string[]; 
+          userErrors: Array<{ field?: string[]; message: string }>;
+        } 
+      } 
+    };
+    
+    if (deleteJson.data?.fileDelete?.userErrors?.length) {
+      console.error("❌ File deletion errors:", deleteJson.data.fileDelete.userErrors);
+    } else {
+      console.log(`✓ Deleted batch of ${batch.length} files`);
+    }
   }
 
-  return fileIds;
+  return allFileIds;
 }
 
 /**
  * Delete all Instagram data (metaobjects and files)
  */
-export async function deleteInstagramData(admin: any): Promise<ActionResponse> {
+export async function deleteInstagramData(admin: ShopifyAdmin): Promise<ActionResponse> {
   try {
     const { postIds, listIds } = await deleteMetaobjects(admin);
     const fileIds = await deleteInstagramFiles(admin);
@@ -154,17 +207,3 @@ export function generateAppEmbedUrl(shop: string, template: string = "index"): s
   return `https://admin.shopify.com/store/${storeHandle}/themes/current/editor?template=${template}&addAppBlockId=${apiKey}/${blockHandle}`;
 }
 
-/**
- * Generate theme editor URL for adding app block (legacy method)
- * @deprecated Use generateAppEmbedUrl for app embeds instead
- */
-export function generateThemeEditorUrl(
-  shop: string,
-  template: string,
-): string {
-  const storeHandle = "near-native-apps-2.myshopify.com";
-  // App block ID format: {client-id}/{block-filename}
-  const appBlockId = "02fee5ebd0c35e7e65f2bdb8944e1ffa/instagram-carousel";
-
-  return `https://admin.shopify.com/store/${storeHandle}/themes/current/editor?template=${template}&addAppBlockId=${appBlockId}`;
-}

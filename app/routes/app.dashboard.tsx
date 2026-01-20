@@ -8,6 +8,7 @@ import {
   useSubmit,
   useNavigation,
   useFetcher,
+  useRevalidator,
 } from "react-router";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
@@ -26,19 +27,13 @@ import {
   handleDisconnectAction,
   handleAddToThemeAction,
 } from "../utils/actions.server";
+import { getInstagramAccount } from "../utils/account.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  // Get Instagram account info
-  const socialAccount = await prisma.socialAccount.findUnique({
-    where: {
-      shop_provider: {
-        shop: session.shop,
-        provider: "instagram",
-      },
-    },
-  });
+  // Get Instagram account info using centralized function
+  const socialAccount = await getInstagramAccount(session.shop);
 
   let instagramAccount: InstagramAccount | null = null;
   let syncStats = {
@@ -67,8 +62,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   // Check which templates have the Instagram block installed
   const appBlockStatus = await checkAppBlockInstallation(admin);
-
-  console.log("🔍 Dashboard loader returning appBlockStatus:", appBlockStatus);
 
   return {
     shop: session.shop,
@@ -122,6 +115,7 @@ export default function Index() {
   const fetcher = useFetcher();
   const syncFetcher = useFetcher();
   const themeFetcher = useFetcher();
+  const revalidator = useRevalidator();
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<string>("");
   const [syncProgress, setSyncProgress] = useState(0);
@@ -168,13 +162,19 @@ export default function Index() {
     setSyncStatus("Connecting to Instagram...");
     setSyncProgress(10);
 
-    // Use fetcher to call the sync endpoint
-    syncFetcher.load("/api/instagram/staged-upload");
+    // Use fetcher to submit to the sync endpoint (using POST action instead of GET loader)
+    // This will automatically revalidate the loader after completion
+    const formData = new FormData();
+    formData.append("action", "sync");
+    syncFetcher.submit(formData, {
+      method: "post",
+      action: "/api/instagram/staged-upload",
+    });
   };
 
   // Handle sync fetcher response
   useEffect(() => {
-    if (syncFetcher.state === "loading" && isSyncing) {
+    if (syncFetcher.state === "submitting" && isSyncing) {
       setSyncStatus("Fetching Instagram posts...");
       setSyncProgress(30);
     }
@@ -202,17 +202,19 @@ export default function Index() {
           setSyncProgress(100);
           setSyncStatus("✓ Sync completed successfully!");
 
-          // Reset and refresh the page to show updated data
+          // Reset sync state and revalidate loader data
           setTimeout(() => {
+            console.log("🔄 Revalidating data after sync...");
             setIsSyncing(false);
             setSyncStatus("");
             setSyncProgress(0);
-            window.location.reload();
+            // Revalidate to fetch updated stats without full page reload
+            revalidator.revalidate();
           }, 2000);
         }, 1500);
       }, 2000);
     }
-  }, [syncFetcher.state, syncFetcher.data, isSyncing]);
+  }, [syncFetcher.state, syncFetcher.data, isSyncing, revalidator]);
 
   // Handle theme fetcher response
   useEffect(() => {
@@ -243,8 +245,14 @@ export default function Index() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    // Use window.location.reload to force a full page refresh
-    window.location.reload();
+    console.log("🔄 Manual refresh triggered");
+    // Use revalidator instead of window.location.reload to avoid breaking Shopify session
+    revalidator.revalidate();
+    // Reset loading state after a moment
+    setTimeout(() => {
+      setIsRefreshing(false);
+      console.log("✓ Refresh complete");
+    }, 1000);
   };
 
   const handleDeleteData = () => {
@@ -743,11 +751,11 @@ export default function Index() {
       </s-section>
 
       {/* Sync Statistics */}
-      {isConnected && (
+      {isConnected && instagramAccount ? (
         <>
           <s-section>
             <s-card>
-              <s-stack gap="base">
+              <s-stack gap="small-100">
                 <s-heading>Sync Statistics</s-heading>
 
                 <div
@@ -782,7 +790,7 @@ export default function Index() {
                     href={`https://admin.shopify.com/store/${shop.replace(
                       ".myshopify.com",
                       "",
-                    )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=instagram`}
+                    )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=${instagramAccount.username}-post-`}
                     target="_blank"
                     border="base"
                     borderRadius="base"
@@ -819,6 +827,10 @@ export default function Index() {
                 </div>
               </s-stack>
             </s-card>
+            <s-banner tone="info">
+              Click the statistics cards above to view your metaobjects in
+              Shopify admin and explore all fields.
+            </s-banner>
           </s-section>
 
           {/* Theme Snippets Download Section */}
@@ -902,16 +914,13 @@ export default function Index() {
                     permalink
                   </s-text>
                 </s-stack>
-
-                <s-banner tone="info">
-                  <s-text>
-                    Click the statistics cards above to view your metaobjects in
-                    Shopify admin and explore all fields.
-                  </s-text>
-                </s-banner>
               </s-stack>
             </s-card>
           </s-section>
+        </>
+      ) : (
+        <>
+          <s-text>No Instagram account connected</s-text>
         </>
       )}
     </s-page>

@@ -47,10 +47,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const checkResult = await checkResponse.json();
     const definitions = checkResult?.data?.metaobjectDefinitions?.edges || [];
     const existsList = definitions.some(
-      (edge: any) => edge.node.type === "instagram-list",
+      (edge: { node: { type: string } }) => edge.node.type === "instagram-list",
     );
     const existsPost = definitions.some(
-      (edge: any) => edge.node.type === "instagram-post",
+      (edge: { node: { type: string } }) => edge.node.type === "instagram-post",
     );
 
     let createdList = false;
@@ -111,7 +111,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ) {
         errors = errors.concat(
           postResult.data.metaobjectDefinitionCreate.userErrors.map(
-            (err: any) => `${err.field?.join(".")}: ${err.message}`,
+            (err: { field?: string[]; message: string }) =>
+              `${err.field?.join(".")}: ${err.message}`,
           ),
         );
         console.error("Metaobject post creation errors:", errors);
@@ -145,7 +146,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
       const postDefResult = await postDefQuery.json();
       const postDef = postDefResult?.data?.metaobjectDefinitions?.edges?.find(
-        (edge: any) => edge.node.type === "instagram-post",
+        (edge: { node: { type: string; id: string } }) =>
+          edge.node.type === "instagram-post",
       );
 
       if (!postDef) {
@@ -220,7 +222,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ) {
         errors = errors.concat(
           listResult.data.metaobjectDefinitionCreate.userErrors.map(
-            (err: any) => `${err.field?.join(".")}: ${err.message}`,
+            (err: { field?: string[]; message: string }) =>
+              `${err.field?.join(".")}: ${err.message}`,
           ),
         );
         console.error("Metaobject list creation errors:", errors);
