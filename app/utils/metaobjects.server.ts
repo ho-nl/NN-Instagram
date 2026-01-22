@@ -18,11 +18,11 @@ async function deleteMetaobjects(admin: ShopifyAdmin): Promise<{
   postIds: string[];
   listIds: string[];
 }> {
-  // Query instagram_post metaobjects
+  // Query nn_instagram_post metaobjects
   const postMetaobjectsQuery = await admin.graphql(`
     #graphql
     query {
-      metaobjects(type: "instagram-post", first: 250) {
+      metaobjects(type: "nn_instagram_post", first: 250) {
         edges { node { id } }
       }
     }
@@ -33,11 +33,11 @@ async function deleteMetaobjects(admin: ShopifyAdmin): Promise<{
       (e) => e.node.id,
     ) || [];
 
-  // Query instagram_list metaobjects
+  // Query nn_instagram_list metaobjects
   const listMetaobjectsQuery = await admin.graphql(`
     #graphql
     query {
-      metaobjects(type: "instagram-list", first: 10) {
+      metaobjects(type: "nn_instagram_list", first: 10) {
         edges { node { id } }
       }
     }

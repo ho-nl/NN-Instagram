@@ -48,10 +48,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     const checkResult = await checkResponse.json();
     const definitions = checkResult?.data?.metaobjectDefinitions?.edges || [];
     const existsList = definitions.some(
-      (edge: { node: { type: string } }) => edge.node.type === "instagram-list",
+      (edge: { node: { type: string } }) => edge.node.type === "nn_instagram_list",
     );
     const existsPost = definitions.some(
-      (edge: { node: { type: string } }) => edge.node.type === "instagram-post",
+      (edge: { node: { type: string } }) => edge.node.type === "nn_instagram_post",
     );
 
     let createdList = false;
@@ -63,8 +63,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const postResponse = await admin.graphql(MetaobjectDefinition, {
         variables: {
           definition: {
-            name: "Instagram Post",
-            type: "instagram-post",
+            name: "NN Instagram Post",
+            type: "nn_instagram_post",
             description: "A metaobject definition for Instagram posts",
             access: {
               storefront: "PUBLIC_READ",
@@ -130,7 +130,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // Create list definition if missing
     if (!existsList) {
-      // First, get the instagram-post definition ID
+      // First, get the nn_instagram_post definition ID
       const postDefQuery = await admin.graphql(
         `#graphql
         query {
@@ -148,12 +148,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const postDefResult = await postDefQuery.json();
       const postDef = postDefResult?.data?.metaobjectDefinitions?.edges?.find(
         (edge: { node: { type: string; id: string } }) =>
-          edge.node.type === "instagram-post",
+          edge.node.type === "nn_instagram_post",
       );
 
       if (!postDef) {
         errors.push(
-          "Instagram Post definition must be created before Instagram List",
+          "NN Instagram Post definition must be created before NN Instagram List",
         );
         return {
           apiKey: process.env.SHOPIFY_API_KEY || "",
@@ -170,8 +170,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       const listResponse = await admin.graphql(MetaobjectDefinition, {
         variables: {
           definition: {
-            name: "Instagram List",
-            type: "instagram-list",
+            name: "NN Instagram List",
+            type: "nn_instagram_list",
             description: "A metaobject definition for Instagram lists",
             access: {
               storefront: "PUBLIC_READ",

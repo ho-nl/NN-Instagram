@@ -933,7 +933,7 @@ export default function Index() {
                   href={`https://admin.shopify.com/store/${shop.replace(
                     ".myshopify.com",
                     "",
-                  )}/content/metaobjects/entries/instagram-post`}
+                  )}/content/metaobjects/entries/nn_instagram_post`}
                   target="_blank"
                   border="base"
                   borderRadius="base"
@@ -1052,7 +1052,7 @@ export default function Index() {
                         fontFamily: "monospace",
                       }}
                     >
-                      {`{% assign instagram = metaobjects['instagram-list']['instagram-feed-list'] %}
+                      {`{% assign instagram = metaobjects['nn_instagram_list']['instagram-feed-list'] %}
 
 {% for post in instagram.posts.value %}
   {{ post.caption.value }}

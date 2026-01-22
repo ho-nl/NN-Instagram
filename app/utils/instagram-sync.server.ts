@@ -249,7 +249,7 @@ export async function upsertPostMetaobject(
   const response = await admin.graphql(mutation, {
     variables: {
       handle: {
-        type: "instagram-post",
+        type: "nn_instagram_post",
         handle: postHandle,
       },
       metaobject: {
@@ -315,7 +315,7 @@ export async function upsertListMetaobject(
   const response = await admin.graphql(mutation, {
     variables: {
       handle: {
-        type: "instagram-list",
+        type: "nn_instagram_list",
         handle: listHandle,
       },
       metaobject: {
@@ -355,7 +355,7 @@ export async function getExistingPost(
 
   const query = `#graphql
     query GetPostByHandle($handle: String!) {
-      metaobjectByHandle(handle: {type: "instagram-post", handle: $handle}) {
+      metaobjectByHandle(handle: {type: "nn_instagram_post", handle: $handle}) {
         id
         handle
         fields {
@@ -410,7 +410,7 @@ export async function deleteOldAccountData(
   const oldPostsQuery = await admin.graphql(`
     #graphql
     query {
-      metaobjects(type: "instagram-post", first: 250) {
+      metaobjects(type: "nn_instagram_post", first: 250) {
         edges { 
           node { 
             id 
@@ -451,7 +451,7 @@ export async function deleteOldAccountData(
     `
     #graphql
     query GetListByHandle($handle: String!) {
-      metaobjectByHandle(handle: {type: "instagram-list", handle: $handle}) {
+      metaobjectByHandle(handle: {type: "nn_instagram_list", handle: $handle}) {
         id
       }
     }

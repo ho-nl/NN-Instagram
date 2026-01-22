@@ -2,7 +2,7 @@
 
 client_id = "02fee5ebd0c35e7e65f2bdb8944e1ffa"
 name = "NN Instagram"
-application_url = "https://shop-test-test.vercel.app/"
+application_url = "https://nn-instagram.vercel.app/"
 embedded = true
 
 [build]
@@ -35,8 +35,8 @@ scopes = "read_metaobjects,write_files,write_metaobject_definitions,write_metaob
 
 [auth]
 redirect_urls = [
-  "https://shop-test-test.vercel.app/auth/callback",
-  "https://shop-test-test.vercel.app/auth/shopify/callback",
-  "https://shop-test-test.vercel.app/api/auth/callback",
-  "https://shop-test-test.vercel.app/instagram/callback",
+  "https://nn-instagram.vercel.app/auth/callback",
+  "https://nn-instagram.vercel.app/auth/shopify/callback",
+  "https://nn-instagram.vercel.app/api/auth/callback",
+  "https://nn-instagram.vercel.app/instagram/callback",
 ]

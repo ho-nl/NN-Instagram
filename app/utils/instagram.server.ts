@@ -34,10 +34,10 @@ export async function getInstagramProfile(
  */
 export async function getSyncStats(admin: ShopifyAdmin): Promise<SyncStats> {
   try {
-    // Count instagram-post metaobjects (all accounts)
+    // Count nn_instagram_post metaobjects (all accounts)
     const postsCountQuery = await admin.graphql(`#graphql
       query {
-        metaobjects(type: "instagram-post", first: 250) {
+        metaobjects(type: "nn_instagram_post", first: 250) {
           nodes {
             id
           }
@@ -46,10 +46,10 @@ export async function getSyncStats(admin: ShopifyAdmin): Promise<SyncStats> {
     `);
     const postsCountData = await postsCountQuery.json();
 
-    // Get instagram-list metaobjects (all accounts) and last sync time
+    // Get nn_instagram_list metaobjects (all accounts) and last sync time
     const listQuery = await admin.graphql(`#graphql
       query {
-        metaobjects(type: "instagram-list", first: 10) {
+        metaobjects(type: "nn_instagram_list", first: 10) {
           nodes {
             id
             fields {
@@ -387,7 +387,7 @@ export async function getInstagramPostsForPreview(admin: ShopifyAdmin, limit: nu
   try {
     const query = await admin.graphql(`#graphql
       query GetInstagramPosts($limit: Int!) {
-        metaobjects(type: "instagram-post", first: $limit) {
+        metaobjects(type: "nn_instagram_post", first: $limit) {
           nodes {
             id
             handle

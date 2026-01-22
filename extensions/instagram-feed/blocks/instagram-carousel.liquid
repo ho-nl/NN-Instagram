@@ -2,9 +2,9 @@
 {% comment %} Use metaobject setting to allow selecting specific Instagram account {% endcomment %}
 {% assign lists = block.settings.instagram_list %}
 
-{% comment %} Fallback: try to find any instagram-list if none selected {% endcomment %}
+{% comment %} Fallback: try to find any nn_instagram_list if none selected {% endcomment %}
 {% if lists == blank %}
-  {% assign lists = metaobjects['instagram-list'].first %}
+  {% assign lists = metaobjects['nn_instagram_list'].first %}
 {% endif %}
 
 {% if lists == blank %}
@@ -1228,7 +1228,7 @@
       "type": "metaobject",
       "id": "instagram_list",
       "label": "Instagram Account",
-      "metaobject_type": "instagram-list",
+      "metaobject_type": "nn_instagram_list",
       "info": "Select which Instagram account to display. If left blank, the first connected account will be used."
     },
     {

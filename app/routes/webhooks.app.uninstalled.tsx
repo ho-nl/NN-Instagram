@@ -57,10 +57,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         const definitionsData = await definitionsQuery.json();
         const definitions = definitionsData.data.metaobjectDefinitions.nodes;
 
-        // Find and delete instagram-post and instagram-list definitions
+        // Find and delete nn_instagram_post and nn_instagram_list definitions
         const instagramDefinitions = definitions.filter(
           (def: { type: string }) =>
-            def.type === "instagram-post" || def.type === "instagram-list",
+            def.type === "nn_instagram_post" || def.type === "nn_instagram_list",
         );
 
         for (const definition of instagramDefinitions) {
