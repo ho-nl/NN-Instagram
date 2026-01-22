@@ -133,7 +133,6 @@ export default function Index() {
   const [selectedPage, setSelectedPage] = useState<string>("index");
   const [showPageModal, setShowPageModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [showConnectModal, setShowConnectModal] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string>("");
   const [connectSuccessMessage, setConnectSuccessMessage] =
     useState<string>("");
@@ -286,11 +285,6 @@ export default function Index() {
   }, [themeFetcher.state, themeFetcher.data]);
 
   const handleConnect = () => {
-    setShowConnectModal(true);
-  };
-
-  const handleConfirmConnect = () => {
-    setShowConnectModal(false);
     window.open(
       `/instagram?shop=${encodeURIComponent(shop)}`,
       "_parent",
@@ -673,6 +667,423 @@ export default function Index() {
         </s-card>
       </s-section>
 
+      {/* Delete Success Banner */}
+      {deleteMessage && (
+        <s-section>
+          <s-banner tone="success" onDismiss={() => setDeleteMessage("")}>
+            {deleteMessage}
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* Connection Success Banner */}
+      {connectSuccessMessage && (
+        <s-section>
+          <s-banner
+            tone="success"
+            onDismiss={() => setConnectSuccessMessage("")}
+          >
+            {connectSuccessMessage}
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* Sync Success Banner */}
+      {syncSuccessMessage && (
+        <s-section>
+          <s-banner tone="success" onDismiss={() => setSyncSuccessMessage("")}>
+            <s-stack gap="small-200">
+              <s-text type="strong">✓ {syncSuccessMessage}</s-text>
+              {syncStats.postsCount > 0 && (
+                <s-stack direction="inline" gap="small-200">
+                  <s-text>📸 {syncStats.postsCount} posts synced</s-text>
+                  <s-text>
+                    🖼️ {syncStats.filesCount} media files uploaded
+                  </s-text>
+                </s-stack>
+              )}
+              <s-text color="subdued">
+                Your Instagram content is now available in Shopify and ready to
+                display on your store.
+              </s-text>
+            </s-stack>
+          </s-banner>
+        </s-section>
+      )}
+
+      {/* Manual Sync Card */}
+      {isConnected && (
+        <s-section>
+          <s-banner tone="info">
+            Your Instagram posts sync automatically every 24 hours. Use the
+            "Sync Now" button above to manually fetch the latest posts.
+          </s-banner>
+          <s-card>
+            <s-stack gap="base">
+              <s-stack gap="small-500">
+                <s-heading>Instagram Sync</s-heading>
+
+                <s-text color="subdued">
+                  Fetch and sync your latest Instagram posts to Shopify
+                </s-text>
+              </s-stack>
+
+              {isSyncing && (
+                <s-stack gap="base">
+                  <s-stack gap="small-200" direction="inline">
+                    <s-spinner />
+                    <s-text>{syncStatus}</s-text>
+                  </s-stack>
+                  {syncProgress > 0 && (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "4px",
+                        background: "#e1e1e1",
+                        borderRadius: "2px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: `${syncProgress}%`,
+                          height: "100%",
+                          background: "#008060",
+                          borderRadius: "2px",
+                          transition: "width 0.3s ease",
+                        }}
+                      />
+                    </div>
+                  )}
+                </s-stack>
+              )}
+
+              {!isSyncing && (
+                <s-stack gap="small-100">
+                  <s-box>
+                    <s-button
+                      onClick={handleSync}
+                      loading={isSyncing}
+                      disabled={isActionRunning}
+                    >
+                      Sync Now
+                    </s-button>
+                  </s-box>
+                  {syncStats.lastSyncTime && (
+                    <s-text color="subdued">
+                      Last synced {formatDate(syncStats.lastSyncTime)}
+                    </s-text>
+                  )}
+                </s-stack>
+              )}
+            </s-stack>
+          </s-card>
+        </s-section>
+      )}
+
+      {/* Connection Status */}
+      <s-section>
+        <s-card>
+          <s-stack gap="base">
+            <s-stack direction="inline" gap="small-200">
+              <s-heading>Instagram Account</s-heading>
+              {isConnected ? (
+                <s-badge tone="success">Connected</s-badge>
+              ) : (
+                <s-badge tone="critical">Not Connected</s-badge>
+              )}
+            </s-stack>
+
+            {isConnected && instagramAccount ? (
+              <s-stack gap="base">
+                <s-stack gap="base" direction="inline">
+                  {instagramAccount.profilePicture && (
+                    <s-thumbnail
+                      src={instagramAccount.profilePicture}
+                      alt={instagramAccount.username}
+                      size="large"
+                    />
+                  )}
+                  <s-stack gap="small-100">
+                    <s-badge>@{instagramAccount.username}</s-badge>
+                    <s-text color="subdued">
+                      Connected {formatDate(instagramAccount.connectedAt)}
+                    </s-text>
+                  </s-stack>
+                </s-stack>
+
+                <s-divider />
+
+                <s-stack gap="small-200" direction="inline">
+                  <s-button
+                    onClick={handleSwitchAccount}
+                    disabled={isSyncing || isActionRunning}
+                  >
+                    Switch Account
+                  </s-button>
+                  <s-button
+                    onClick={handleDeleteData}
+                    tone="critical"
+                    loading={
+                      fetcher.state === "submitting" &&
+                      fetcher.formData?.get("action") === "delete-data"
+                    }
+                    disabled={isSyncing || isActionRunning}
+                  >
+                    Delete Data
+                  </s-button>
+                  <s-button
+                    onClick={handleDisconnect}
+                    tone="critical"
+                    loading={
+                      fetcher.state === "submitting" &&
+                      fetcher.formData?.get("action") === "disconnect"
+                    }
+                    disabled={isSyncing || isActionRunning}
+                  >
+                    Disconnect
+                  </s-button>
+                </s-stack>
+              </s-stack>
+            ) : (
+              <s-stack gap="base">
+                <s-text>
+                  Connect your Instagram Business account to sync posts to
+                  Shopify metaobjects and files.
+                </s-text>
+
+                <s-divider />
+
+                <s-stack gap="small-200">
+                  <s-text type="strong">What happens when you connect:</s-text>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="lock" tone="info" />
+                    <s-stack gap="small-100">
+                      <s-text type="strong">1. Log in with Instagram</s-text>
+                      <s-text color="subdued">
+                        Enter your Instagram username and password (or use
+                        existing session)
+                      </s-text>
+                    </s-stack>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="check-circle" tone="success" />
+                    <s-stack gap="small-100">
+                      <s-text type="strong">2. Grant permissions</s-text>
+                      <s-text color="subdued">
+                        Allow access to your Instagram posts and profile
+                        information
+                      </s-text>
+                    </s-stack>
+                  </s-stack>
+
+                  <s-stack direction="inline" gap="small-200">
+                    <s-icon type="arrow-right" tone="info" />
+                    <s-stack gap="small-100">
+                      <s-text type="strong">3. Return to dashboard</s-text>
+                      <s-text color="subdued">
+                        You'll be redirected back here to complete setup
+                      </s-text>
+                    </s-stack>
+                  </s-stack>
+                </s-stack>
+
+                <s-banner tone="info">
+                  <s-stack gap="small-100">
+                    <s-text type="strong">Required Permissions:</s-text>
+                    <s-text>
+                      • <strong>instagram_business_basic:</strong> Access your
+                      Instagram posts and profile information
+                    </s-text>
+                    <s-text color="subdued">
+                      These permissions allow us to display your Instagram
+                      content on your Shopify store.
+                    </s-text>
+                  </s-stack>
+                </s-banner>
+
+                <s-box>
+                  <s-button variant="primary" onClick={handleConnect}>
+                    Connect Instagram Account
+                  </s-button>
+                </s-box>
+              </s-stack>
+            )}
+          </s-stack>
+        </s-card>
+      </s-section>
+
+      {/* Sync Statistics */}
+      {isConnected && instagramAccount ? (
+        <>
+          <s-section>
+            <s-stack gap="small-100">
+              <s-heading>Sync Statistics</s-heading>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "16px",
+                }}
+              >
+                {/* Posts Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/metaobjects/entries/instagram-post`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
+                >
+                  <s-stack gap="small-200">
+                    <s-icon type="social-post" tone="info" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.postsCount}
+                    </div>
+                    <s-text color="subdued">Posts Synced</s-text>
+                  </s-stack>
+                </s-clickable>
+
+                {/* Files Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=${instagramAccount.username}-post-`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
+                >
+                  <s-stack gap="small-200">
+                    <s-icon type="image" tone="success" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.filesCount}
+                    </div>
+                    <s-text color="subdued">Files Created</s-text>
+                  </s-stack>
+                </s-clickable>
+
+                {/* Metaobjects Card */}
+                <s-clickable
+                  href={`https://admin.shopify.com/store/${shop.replace(
+                    ".myshopify.com",
+                    "",
+                  )}/content/metaobjects`}
+                  target="_blank"
+                  border="base"
+                  borderRadius="base"
+                  padding="base"
+                >
+                  <s-stack gap="small-200">
+                    <s-icon type="file" tone="warning" />
+                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
+                      {syncStats.metaobjectsCount}
+                    </div>
+                    <s-text color="subdued">Metaobjects</s-text>
+                  </s-stack>
+                </s-clickable>
+              </div>
+              <s-banner tone="info">
+                Click the statistics cards above to view your metaobjects in
+                Shopify admin and explore all fields.
+              </s-banner>
+            </s-stack>
+          </s-section>
+
+          {/* Theme Snippets Download Section */}
+          <s-section>
+            <s-card>
+              <s-stack gap="base">
+                <s-stack gap="small-200">
+                  <s-heading>Theme Integration</s-heading>
+                  <s-text color="subdued">
+                    Download ready-to-use Liquid snippets for your Shopify theme
+                  </s-text>
+                </s-stack>
+
+                <s-stack gap="small-200">
+                  <s-text type="strong">Horizon Theme Files</s-text>
+                  <s-text color="subdued">
+                    Download pre-built Instagram carousel snippets optimized for
+                    Horizon theme
+                  </s-text>
+                  <s-button
+                    variant="primary"
+                    onClick={handleDownloadThemeFiles}
+                  >
+                    Download Horizon Files
+                  </s-button>
+                </s-stack>
+              </s-stack>
+            </s-card>
+          </s-section>
+
+          {/* Developer Guide */}
+          <s-section>
+            <s-card>
+              <s-stack gap="base">
+                <s-heading>Developer Guide</s-heading>
+
+                <s-text color="subdued">
+                  Access the synced Instagram posts in your theme with this
+                  simple Liquid code.
+                </s-text>
+
+                <s-divider />
+
+                <s-stack gap="small-200">
+                  <s-text type="strong">Accessing the Data</s-text>
+                  <s-box
+                    padding="base"
+                    background="subdued"
+                    borderRadius="base"
+                  >
+                    <pre
+                      style={{
+                        fontSize: "12px",
+                        lineHeight: "1.5",
+                        overflow: "auto",
+                        margin: 0,
+                        fontFamily: "monospace",
+                      }}
+                    >
+                      {`{% assign instagram = metaobjects['instagram-list']['instagram-feed-list'] %}
+
+{% for post in instagram.posts.value %}
+  {{ post.caption.value }}
+  {{ post.likes.value }}
+  {{ post.comments.value }}
+  
+  {% for media in post.images.value %}
+    {{ media | image_url: width: 800 }}
+  {% endfor %}
+{% endfor %}`}
+                    </pre>
+                  </s-box>
+                </s-stack>
+
+                <s-divider />
+
+                <s-stack gap="small-200">
+                  <s-text type="strong">Available Fields</s-text>
+                  <s-text color="subdued">
+                    Each post includes: caption, likes, comments, images, and
+                    permalink
+                  </s-text>
+                </s-stack>
+              </s-stack>
+            </s-card>
+          </s-section>
+        </>
+      ) : (
+        <></>
+      )}
+
       {/* Design Configuration Section - Show when posts are synced */}
       {isConnected && hasPosts && (
         <s-section>
@@ -830,9 +1241,13 @@ export default function Index() {
                   {/* Padding Horizontal */}
                   <s-box>
                     <s-stack gap="small-200">
-                      <s-text type="strong">
-                        Padding H: {designSettings.paddingLeftRight}px
-                      </s-text>
+                      <s-paragraph>
+                        <s-text type="strong">
+                          Padding H: {designSettings.paddingLeftRight}px
+                        </s-text>
+                        <s-text> (Max: 80px)</s-text>
+                      </s-paragraph>
+
                       <input
                         type="range"
                         min="0"
@@ -1150,482 +1565,6 @@ export default function Index() {
             </s-stack>
           </s-card>
         </s-section>
-      )}
-
-      {/* Delete Success Banner */}
-      {deleteMessage && (
-        <s-section>
-          <s-banner tone="success" onDismiss={() => setDeleteMessage("")}>
-            {deleteMessage}
-          </s-banner>
-        </s-section>
-      )}
-
-      {/* Connection Success Banner */}
-      {connectSuccessMessage && (
-        <s-section>
-          <s-banner
-            tone="success"
-            onDismiss={() => setConnectSuccessMessage("")}
-          >
-            {connectSuccessMessage}
-          </s-banner>
-        </s-section>
-      )}
-
-      {/* Sync Success Banner */}
-      {syncSuccessMessage && (
-        <s-section>
-          <s-banner tone="success" onDismiss={() => setSyncSuccessMessage("")}>
-            <s-stack gap="small-200">
-              <s-text type="strong">✓ {syncSuccessMessage}</s-text>
-              {syncStats.postsCount > 0 && (
-                <s-stack direction="inline" gap="small-200">
-                  <s-text>📸 {syncStats.postsCount} posts synced</s-text>
-                  <s-text>
-                    🖼️ {syncStats.filesCount} media files uploaded
-                  </s-text>
-                </s-stack>
-              )}
-              <s-text color="subdued">
-                Your Instagram content is now available in Shopify and ready to
-                display on your store.
-              </s-text>
-            </s-stack>
-          </s-banner>
-        </s-section>
-      )}
-
-      {/* Manual Sync Card */}
-      {isConnected && (
-        <s-section>
-          <s-banner tone="info">
-            Your Instagram posts sync automatically every 24 hours. Use the
-            "Sync Now" button above to manually fetch the latest posts.
-          </s-banner>
-          <s-card>
-            <s-stack gap="base">
-              <s-stack gap="small-500">
-                <s-heading>Instagram Sync</s-heading>
-
-                <s-text color="subdued">
-                  Fetch and sync your latest Instagram posts to Shopify
-                </s-text>
-              </s-stack>
-
-              {isSyncing && (
-                <s-stack gap="base">
-                  <s-stack gap="small-200" direction="inline">
-                    <s-spinner />
-                    <s-text>{syncStatus}</s-text>
-                  </s-stack>
-                  {syncProgress > 0 && (
-                    <div
-                      style={{
-                        width: "100%",
-                        height: "4px",
-                        background: "#e1e1e1",
-                        borderRadius: "2px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${syncProgress}%`,
-                          height: "100%",
-                          background: "#008060",
-                          borderRadius: "2px",
-                          transition: "width 0.3s ease",
-                        }}
-                      />
-                    </div>
-                  )}
-                </s-stack>
-              )}
-
-              {!isSyncing && (
-                <s-stack gap="small-100">
-                  <s-box>
-                    <s-button
-                      onClick={handleSync}
-                      loading={isSyncing}
-                      disabled={isActionRunning}
-                    >
-                      Sync Now
-                    </s-button>
-                  </s-box>
-                  {syncStats.lastSyncTime && (
-                    <s-text color="subdued">
-                      Last synced {formatDate(syncStats.lastSyncTime)}
-                    </s-text>
-                  )}
-                </s-stack>
-              )}
-            </s-stack>
-          </s-card>
-        </s-section>
-      )}
-
-      {/* Connection Status */}
-      <s-section>
-        <s-card>
-          <s-stack gap="base">
-            <s-stack direction="inline" gap="small-200">
-              <s-heading>Instagram Account</s-heading>
-              {isConnected ? (
-                <s-badge tone="success">Connected</s-badge>
-              ) : (
-                <s-badge tone="critical">Not Connected</s-badge>
-              )}
-            </s-stack>
-
-            {isConnected && instagramAccount ? (
-              <s-stack gap="base">
-                <s-stack gap="base" direction="inline">
-                  {instagramAccount.profilePicture && (
-                    <s-thumbnail
-                      src={instagramAccount.profilePicture}
-                      alt={instagramAccount.username}
-                      size="large"
-                    />
-                  )}
-                  <s-stack gap="small-100">
-                    <s-badge>@{instagramAccount.username}</s-badge>
-                    <s-text color="subdued">
-                      Connected {formatDate(instagramAccount.connectedAt)}
-                    </s-text>
-                  </s-stack>
-                </s-stack>
-
-                <s-divider />
-
-                <s-stack gap="small-200" direction="inline">
-                  <s-button
-                    onClick={handleSwitchAccount}
-                    disabled={isSyncing || isActionRunning}
-                  >
-                    Switch Account
-                  </s-button>
-                  <s-button
-                    onClick={handleDeleteData}
-                    tone="critical"
-                    loading={
-                      fetcher.state === "submitting" &&
-                      fetcher.formData?.get("action") === "delete-data"
-                    }
-                    disabled={isSyncing || isActionRunning}
-                  >
-                    Delete Data
-                  </s-button>
-                  <s-button
-                    onClick={handleDisconnect}
-                    tone="critical"
-                    loading={
-                      fetcher.state === "submitting" &&
-                      fetcher.formData?.get("action") === "disconnect"
-                    }
-                    disabled={isSyncing || isActionRunning}
-                  >
-                    Disconnect
-                  </s-button>
-                </s-stack>
-              </s-stack>
-            ) : (
-              <s-stack gap="base">
-                <s-text>
-                  Connect your Instagram Business account to sync posts to
-                  Shopify metaobjects and files.
-                </s-text>
-                <s-box>
-                  <s-button variant="primary" onClick={handleConnect}>
-                    Connect Instagram Account
-                  </s-button>
-                </s-box>
-              </s-stack>
-            )}
-          </s-stack>
-        </s-card>
-      </s-section>
-
-      {/* Sync Statistics */}
-      {isConnected && instagramAccount ? (
-        <>
-          <s-section>
-            <s-stack gap="small-100">
-              <s-heading>Sync Statistics</s-heading>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(3, 1fr)",
-                  gap: "16px",
-                }}
-              >
-                {/* Posts Card */}
-                <s-clickable
-                  href={`https://admin.shopify.com/store/${shop.replace(
-                    ".myshopify.com",
-                    "",
-                  )}/content/metaobjects/entries/instagram-post`}
-                  target="_blank"
-                  border="base"
-                  borderRadius="base"
-                  padding="base"
-                >
-                  <s-stack gap="small-200">
-                    <s-icon type="social-post" tone="info" />
-                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                      {syncStats.postsCount}
-                    </div>
-                    <s-text color="subdued">Posts Synced</s-text>
-                  </s-stack>
-                </s-clickable>
-
-                {/* Files Card */}
-                <s-clickable
-                  href={`https://admin.shopify.com/store/${shop.replace(
-                    ".myshopify.com",
-                    "",
-                  )}/content/files?selectedView=all&media_type=IMAGE%2CVIDEO&query=${instagramAccount.username}-post-`}
-                  target="_blank"
-                  border="base"
-                  borderRadius="base"
-                  padding="base"
-                >
-                  <s-stack gap="small-200">
-                    <s-icon type="image" tone="success" />
-                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                      {syncStats.filesCount}
-                    </div>
-                    <s-text color="subdued">Files Created</s-text>
-                  </s-stack>
-                </s-clickable>
-
-                {/* Metaobjects Card */}
-                <s-clickable
-                  href={`https://admin.shopify.com/store/${shop.replace(
-                    ".myshopify.com",
-                    "",
-                  )}/content/metaobjects`}
-                  target="_blank"
-                  border="base"
-                  borderRadius="base"
-                  padding="base"
-                >
-                  <s-stack gap="small-200">
-                    <s-icon type="file" tone="warning" />
-                    <div style={{ fontSize: "28px", fontWeight: "600" }}>
-                      {syncStats.metaobjectsCount}
-                    </div>
-                    <s-text color="subdued">Metaobjects</s-text>
-                  </s-stack>
-                </s-clickable>
-              </div>
-              <s-banner tone="info">
-                Click the statistics cards above to view your metaobjects in
-                Shopify admin and explore all fields.
-              </s-banner>
-            </s-stack>
-          </s-section>
-
-          {/* Theme Snippets Download Section */}
-          <s-section>
-            <s-card>
-              <s-stack gap="base">
-                <s-stack gap="small-200">
-                  <s-heading>Theme Integration</s-heading>
-                  <s-text color="subdued">
-                    Download ready-to-use Liquid snippets for your Shopify theme
-                  </s-text>
-                </s-stack>
-
-                <s-stack gap="small-200">
-                  <s-text type="strong">Horizon Theme Files</s-text>
-                  <s-text color="subdued">
-                    Download pre-built Instagram carousel snippets optimized for
-                    Horizon theme
-                  </s-text>
-                  <s-button
-                    variant="primary"
-                    onClick={handleDownloadThemeFiles}
-                  >
-                    Download Horizon Files
-                  </s-button>
-                </s-stack>
-              </s-stack>
-            </s-card>
-          </s-section>
-
-          {/* Developer Guide */}
-          <s-section>
-            <s-card>
-              <s-stack gap="base">
-                <s-heading>Developer Guide</s-heading>
-
-                <s-text color="subdued">
-                  Access the synced Instagram posts in your theme with this
-                  simple Liquid code.
-                </s-text>
-
-                <s-divider />
-
-                <s-stack gap="small-200">
-                  <s-text type="strong">Accessing the Data</s-text>
-                  <s-box
-                    padding="base"
-                    background="subdued"
-                    borderRadius="base"
-                  >
-                    <pre
-                      style={{
-                        fontSize: "12px",
-                        lineHeight: "1.5",
-                        overflow: "auto",
-                        margin: 0,
-                        fontFamily: "monospace",
-                      }}
-                    >
-                      {`{% assign instagram = metaobjects['instagram-list']['instagram-feed-list'] %}
-
-{% for post in instagram.posts.value %}
-  {{ post.caption.value }}
-  {{ post.likes.value }}
-  {{ post.comments.value }}
-  
-  {% for media in post.images.value %}
-    {{ media | image_url: width: 800 }}
-  {% endfor %}
-{% endfor %}`}
-                    </pre>
-                  </s-box>
-                </s-stack>
-
-                <s-divider />
-
-                <s-stack gap="small-200">
-                  <s-text type="strong">Available Fields</s-text>
-                  <s-text color="subdued">
-                    Each post includes: caption, likes, comments, images, and
-                    permalink
-                  </s-text>
-                </s-stack>
-              </s-stack>
-            </s-card>
-          </s-section>
-        </>
-      ) : (
-        <>
-          <s-text>No Instagram account connected</s-text>
-        </>
-      )}
-
-      {/* Connection Explanation Modal - Using overlay approach */}
-      {showConnectModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={() => setShowConnectModal(false)}
-        >
-          <div
-            style={{
-              maxWidth: "600px",
-              width: "90%",
-              maxHeight: "90vh",
-              overflowY: "auto",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <s-card>
-              <s-box padding="base">
-                <s-stack gap="base">
-                  <s-stack gap="small-200">
-                    <s-heading>Connect Instagram Account</s-heading>
-                    <s-text>
-                      You will be redirected to Instagram to complete the
-                      following steps:
-                    </s-text>
-                  </s-stack>
-
-                  <s-box
-                    padding="base"
-                    background="subdued"
-                    borderRadius="base"
-                  >
-                    <s-stack gap="small-400">
-                      <s-stack direction="inline" gap="small-200">
-                        <s-icon type="lock" tone="info" />
-                        <s-text type="strong">
-                          1. Log in with your Instagram account
-                        </s-text>
-                      </s-stack>
-                      <s-text color="subdued">
-                        Enter your Instagram username and password (or use
-                        existing session)
-                      </s-text>
-
-                      <s-divider />
-
-                      <s-stack direction="inline" gap="small-200">
-                        <s-icon type="check-circle" tone="success" />
-                        <s-text type="strong">
-                          2. Grant permission to access your data
-                        </s-text>
-                      </s-stack>
-                      <s-text color="subdued">
-                        Allow access to your Instagram posts and profile
-                        information
-                      </s-text>
-
-                      <s-divider />
-
-                      <s-stack direction="inline" gap="small-200">
-                        <s-icon type="arrow-right" tone="info" />
-                        <s-text type="strong">
-                          3. Return to this dashboard
-                        </s-text>
-                      </s-stack>
-                      <s-text color="subdued">
-                        You'll be redirected back here to complete setup
-                      </s-text>
-                    </s-stack>
-                  </s-box>
-
-                  <s-banner tone="info">
-                    <s-stack gap="small-100">
-                      <s-text type="strong">Required Permissions:</s-text>
-                      <s-text>
-                        • <strong>instagram_basic:</strong> Access your
-                        Instagram posts and profile information
-                      </s-text>
-                      <s-text color="subdued">
-                        These permissions allow us to display your Instagram
-                        content on your Shopify store.
-                      </s-text>
-                    </s-stack>
-                  </s-banner>
-
-                  <s-stack direction="inline" gap="small-200">
-                    <s-button variant="primary" onClick={handleConfirmConnect}>
-                      Continue to Instagram
-                    </s-button>
-                    <s-button onClick={() => setShowConnectModal(false)}>
-                      Cancel
-                    </s-button>
-                  </s-stack>
-                </s-stack>
-              </s-box>
-            </s-card>
-          </div>
-        </div>
       )}
     </s-page>
   );

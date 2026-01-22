@@ -362,9 +362,6 @@ export default function Index() {
                           Instagram Business or Creator account
                         </s-list-item>
                         <s-list-item>
-                          Shopify plan that supports metaobjects
-                        </s-list-item>
-                        <s-list-item>
                           Liquid/theme development knowledge to build custom
                           feeds
                         </s-list-item>
