@@ -117,8 +117,6 @@ export default function Index() {
     instagramPosts,
   } = useLoaderData<typeof loader>();
 
-  console.log("🎨 Component received appBlockStatus:", appBlockStatus);
-
   const submit = useSubmit();
   const navigation = useNavigation();
   const fetcher = useFetcher();
@@ -256,7 +254,6 @@ export default function Index() {
 
           // Reset sync state and revalidate loader data
           setTimeout(() => {
-            console.log("🔄 Revalidating data after sync...");
             setIsSyncing(false);
             setSyncStatus("");
             setSyncProgress(0);
@@ -302,13 +299,11 @@ export default function Index() {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    console.log("🔄 Manual refresh triggered");
     // Use revalidator instead of window.location.reload to avoid breaking Shopify session
     revalidator.revalidate();
     // Reset loading state after a moment
     setTimeout(() => {
       setIsRefreshing(false);
-      console.log("✓ Refresh complete");
     }, 1000);
   };
 

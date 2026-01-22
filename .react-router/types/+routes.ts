@@ -55,15 +55,12 @@ type Pages = {
   "/app/dashboard": {
     params: {};
   };
-  "/app/design": {
-    params: {};
-  };
 };
 
 type RouteFiles = {
   "root.tsx": {
     id: "root";
-    page: "/" | "/api/instagram/staged-upload" | "/api/delete-instagram-data" | "/api/download-theme" | "/api/cron/refresh" | "/auth/login" | "/instagram" | "/instagram/callback" | "/webhooks" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/auth/*" | "/app" | "/app/dashboard" | "/app/design";
+    page: "/" | "/api/instagram/staged-upload" | "/api/delete-instagram-data" | "/api/download-theme" | "/api/cron/refresh" | "/auth/login" | "/instagram" | "/instagram/callback" | "/webhooks" | "/webhooks/app/scopes_update" | "/webhooks/app/uninstalled" | "/auth/*" | "/app" | "/app/dashboard";
   };
   "routes/api.instagram.staged-upload.tsx": {
     id: "routes/api.instagram.staged-upload";
@@ -115,7 +112,7 @@ type RouteFiles = {
   };
   "routes/app.tsx": {
     id: "routes/app";
-    page: "/app" | "/app/dashboard" | "/app/design";
+    page: "/app" | "/app/dashboard";
   };
   "routes/app.dashboard.tsx": {
     id: "routes/app.dashboard";
@@ -124,10 +121,6 @@ type RouteFiles = {
   "routes/app._index.tsx": {
     id: "routes/app._index";
     page: "/app";
-  };
-  "routes/app.design.tsx": {
-    id: "routes/app.design";
-    page: "/app/design";
   };
 };
 
@@ -148,5 +141,4 @@ type RouteModules = {
   "routes/app": typeof import("./app/routes/app.tsx");
   "routes/app.dashboard": typeof import("./app/routes/app.dashboard.tsx");
   "routes/app._index": typeof import("./app/routes/app._index.tsx");
-  "routes/app.design": typeof import("./app/routes/app.design.tsx");
 };

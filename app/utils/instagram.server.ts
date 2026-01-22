@@ -186,7 +186,6 @@ export async function checkAppBlockInstallation(
     const publishedTheme = themesData.data?.themes?.nodes?.[0];
 
     if (!publishedTheme) {
-      console.log("No published theme found");
       return installationStatus;
     }
 
@@ -250,8 +249,6 @@ export async function checkAppBlockInstallation(
       const edges = filesData.data?.theme?.files?.edges || [];
       const pageInfo = filesData.data?.theme?.files?.pageInfo;
 
-      console.log(`📦 Fetched ${edges.length} theme files...`);
-
       // Check each file for app block
       for (const edge of edges) {
         const file = edge.node;
@@ -272,22 +269,14 @@ export async function checkAppBlockInstallation(
               const parsedContent = JSON.parse(cleanContent);
               const hasBlock = checkForAppBlock(parsedContent);
               
-              console.log(`  Checking ${file.filename}: ${hasBlock ? '✓ HAS BLOCK' : '✗ no block'}`);
-              
               if (hasBlock) {
                 // Extract template name from filename
                 const match = file.filename.match(/templates\/([^/]+)\.json/);
                 if (match) {
                   const templateName = match[1];
-                  console.log(`    Extracted template name: ${templateName}`);
                   if (templates.includes(templateName)) {
                     installationStatus[templateName] = true;
-                    console.log(`    ✓ Marked ${templateName} as having app block`);
-                  } else {
-                    console.log(`    ⚠️  Template ${templateName} not in tracked list`);
                   }
-                } else {
-                  console.log(`    ⚠️  Could not extract template name from ${file.filename}`);
                 }
               }
             } catch (parseError) {
@@ -303,20 +292,14 @@ export async function checkAppBlockInstallation(
                   const templateName = match[1];
                   if (templates.includes(templateName)) {
                     installationStatus[templateName] = true;
-                    console.log(`  ✓ Instagram app block found in ${file.filename} (via string search)`);
                   }
                 }
-              } else {
-                console.log(`  ⚠️  Skipped ${file.filename} (could not parse, no block found)`);
               }
             }
           }
           // For Liquid files, do a simple string search
           else if (file.filename.endsWith('.liquid')) {
             const hasBlock = checkForAppBlock(content);
-            if (hasBlock) {
-              console.log(`  ✓ Instagram app block found in section: ${file.filename}`);
-            }
           }
         }
       }
@@ -324,13 +307,8 @@ export async function checkAppBlockInstallation(
       // Check pagination
       hasNextPage = pageInfo?.hasNextPage || false;
       cursor = pageInfo?.endCursor || null;
-      
-      if (hasNextPage) {
-        console.log(`📄 More pages available, fetching next batch...`);
-      }
     }
 
-    console.log('\n📊 Final installation status:', installationStatus);
     return installationStatus;
   } catch (error) {
     console.error("Error checking app block installation:", error);

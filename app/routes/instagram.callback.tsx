@@ -54,12 +54,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // Use the long-lived token if successful, otherwise fall back to short-lived
     const finalToken = longLivedData.access_token || data.access_token;
-    const tokenType = longLivedData.access_token ? "long-lived" : "short-lived";
     const expiresAt = longLivedData.expires_in
       ? new Date(Date.now() + longLivedData.expires_in * 1000)
       : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days default
-
-    console.log(`[instagram.callback] Got ${tokenType} token, expires at:`, expiresAt);
 
     // For Instagram Business API, fetch the Instagram Business Account ID
     let instagramBusinessAccountId: string | null = null;
@@ -71,7 +68,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       
       if (meData.id) {
         instagramBusinessAccountId = meData.id;
-        console.log(`[instagram.callback] Instagram Business Account ID: ${instagramBusinessAccountId}, Username: ${meData.username}, Type: ${meData.account_type}`);
       }
     } catch (meError) {
       console.error("Failed to fetch Instagram Business Account info:", meError);
@@ -103,8 +99,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       // Redirect directly to dashboard with success message
       const shopSlug = shop.replace(".myshopify.com", "");
       const redirectUrl = `https://admin.shopify.com/store/${shopSlug}/apps/nn_instagram/app/dashboard?connected=true`;
-
-      console.log(`[instagram.callback] Redirecting to: ${redirectUrl}`);
 
       // Simple redirect HTML with minimal delay
       const redirectHtml = `
