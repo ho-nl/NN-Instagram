@@ -59,6 +59,24 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? new Date(Date.now() + longLivedData.expires_in * 1000)
       : new Date(Date.now() + 60 * 24 * 60 * 60 * 1000); // 60 days default
 
+    console.log(`[instagram.callback] Got ${tokenType} token, expires at:`, expiresAt);
+
+    // For Instagram Business API, fetch the Instagram Business Account ID
+    let instagramBusinessAccountId: string | null = null;
+    try {
+      const meResponse = await fetch(
+        `https://graph.instagram.com/me?fields=id,username,account_type&access_token=${finalToken}`
+      );
+      const meData = await meResponse.json();
+      
+      if (meData.id) {
+        instagramBusinessAccountId = meData.id;
+        console.log(`[instagram.callback] Instagram Business Account ID: ${instagramBusinessAccountId}, Username: ${meData.username}, Type: ${meData.account_type}`);
+      }
+    } catch (meError) {
+      console.error("Failed to fetch Instagram Business Account info:", meError);
+    }
+
     // Update existing or create new Instagram token
     try {
       await prisma.socialAccount.upsert({
@@ -70,14 +88,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         },
         update: {
           accessToken: finalToken,
-          userId: data.user_id?.toString(),
+          userId: instagramBusinessAccountId || data.user_id?.toString(),
           expiresAt: expiresAt,
         },
         create: {
           shop: shop,
           provider: "instagram",
           accessToken: finalToken,
-          userId: data.user_id?.toString(),
+          userId: instagramBusinessAccountId || data.user_id?.toString(),
           expiresAt: expiresAt,
         },
       });

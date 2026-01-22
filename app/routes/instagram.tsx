@@ -15,7 +15,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Store the shop in the state parameter
   const state = btoa(JSON.stringify({ shop }));
 
-  const authUrl = `https://www.instagram.com/oauth/authorize?force_reauth=true&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
+  // Instagram Business API OAuth URL
+  const authUrl = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scope)}&state=${state}`;
 
   return redirect(authUrl);
 };
