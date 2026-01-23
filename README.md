@@ -627,8 +627,6 @@ For complete testing guide, see [SHOPIFY_TESTING_INSTRUCTIONS.md](./SHOPIFY_TEST
 
 Planned features:
 
-- **Automatic Token Refresh**: Auto-renew tokens before 60-day expiration
-- **Scheduled Sync**: Background sync on a schedule (daily, weekly)
 - **Hashtag Filtering**: Sync only posts with specific hashtags
 - **Story Support**: Display Instagram Stories (24-hour availability)
 - **Reel Support**: Enhanced video post display
