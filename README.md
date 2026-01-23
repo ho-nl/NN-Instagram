@@ -91,28 +91,6 @@ Each setting is fully customizable:
 4. **Instagram Business Account**: Required for API access
 5. **PostgreSQL Database**: For production (Prisma Accelerate recommended)
 
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
-```bash
-# Shopify App Configuration
-SHOPIFY_API_KEY="your_shopify_api_key"
-SHOPIFY_API_SECRET="your_shopify_api_secret"
-
-# Instagram Business API
-INSTAGRAM_APP_ID="848980354519999"
-INSTAGRAM_APP_SECRET="your_instagram_app_secret"
-INSTAGRAM_REDIRECT_URI="https://nn-instagram.vercel.app/instagram/callback"
-INSTA_SCOPES="instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments,instagram_business_content_publish,instagram_business_manage_insights"
-
-# Database (Prisma Accelerate)
-DATABASE_URL="your_prisma_accelerate_connection_string"
-
-# Shopify Scopes
-SCOPES="read_metaobjects,write_files,write_metaobject_definitions,write_metaobjects,write_themes"
-```
-
 ### Local Development
 
 ```shell
