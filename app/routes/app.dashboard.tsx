@@ -5,7 +5,6 @@ import type {
 } from "react-router";
 import {
   useLoaderData,
-  useSubmit,
   useNavigation,
   useFetcher,
   useRevalidator,
@@ -13,9 +12,8 @@ import {
 } from "react-router";
 import { useState, useEffect } from "react";
 import { authenticate } from "../shopify.server";
-import prisma from "../db.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
-import type { LoaderData, InstagramAccount } from "../types/instagram.types";
+import type { InstagramAccount } from "../types/instagram.types";
 import {
   getInstagramProfile,
   getSyncStats,
@@ -34,7 +32,6 @@ import { getInstagramAccount } from "../utils/account.server";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, admin } = await authenticate.admin(request);
 
-  // Get Instagram account info using centralized function
   const socialAccount = await getInstagramAccount(session.shop);
 
   let instagramAccount: InstagramAccount | null = null;
@@ -46,7 +43,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   };
 
   if (socialAccount) {
-    // Fetch Instagram profile info
     const profile = await getInstagramProfile(socialAccount.accessToken);
     if (profile) {
       instagramAccount = {
@@ -55,19 +51,16 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       };
     }
 
-    // Get sync statistics from Shopify
     syncStats = await getSyncStats(admin);
   }
 
-  // Fetch theme pages (templates) for app block installation
   const themePages = await getThemePages(admin);
-
-  // Check which templates have the Instagram block installed
   const appBlockStatus = await checkAppBlockInstallation(admin);
-
-  // Fetch Instagram posts for preview (if connected)
+  
+  // Defer loading Instagram posts - only load first 6 for initial render
+  // This implements the PRPL pattern (defer non-critical resources)
   const instagramPosts = socialAccount
-    ? await getInstagramPostsForPreview(admin, 12)
+    ? await getInstagramPostsForPreview(admin, 6)
     : [];
 
   return {
@@ -117,7 +110,6 @@ export default function Index() {
     instagramPosts,
   } = useLoaderData<typeof loader>();
 
-  const submit = useSubmit();
   const navigation = useNavigation();
   const fetcher = useFetcher();
   const syncFetcher = useFetcher();
@@ -128,14 +120,11 @@ export default function Index() {
   const [syncStatus, setSyncStatus] = useState<string>("");
   const [syncProgress, setSyncProgress] = useState(0);
   const [deleteMessage, setDeleteMessage] = useState<string>("");
-  const [selectedPage, setSelectedPage] = useState<string>("index");
   const [showPageModal, setShowPageModal] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [syncSuccessMessage, setSyncSuccessMessage] = useState<string>("");
   const [connectSuccessMessage, setConnectSuccessMessage] =
     useState<string>("");
 
-  // Design settings state
   const [designSettings, setDesignSettings] = useState({
     postsLimit: 12,
     aspectRatio: "portrait" as "portrait" | "square",
@@ -153,26 +142,21 @@ export default function Index() {
   const isActionRunning =
     navigation.state === "submitting" || fetcher.state === "submitting";
 
-  // Check for connection success from OAuth callback
   useEffect(() => {
     if (searchParams.get("connected") === "true") {
       setConnectSuccessMessage(
-        "✓ Your Instagram account has been successfully connected!",
+        "Your Instagram account has been successfully connected!",
       );
-
-      // Remove the parameter from URL
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("connected");
       setSearchParams(newParams, { replace: true });
 
-      // Auto-dismiss after 5 seconds
       setTimeout(() => {
         setConnectSuccessMessage("");
       }, 5000);
     }
   }, [searchParams, setSearchParams]);
 
-  // Handle fetcher response (for delete/disconnect actions)
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
       const data = fetcher.data as {
@@ -182,7 +166,6 @@ export default function Index() {
         message?: string;
       };
       if (data.success) {
-        // Show success message with details
         if (
           data.deletedMetaobjects !== undefined &&
           data.deletedFiles !== undefined
@@ -191,13 +174,10 @@ export default function Index() {
             `✓ Successfully deleted ${data.deletedMetaobjects} metaobjects and ${data.deletedFiles} files`,
           );
 
-          // Auto-dismiss message after 5 seconds
           setTimeout(() => {
             setDeleteMessage("");
           }, 5000);
         }
-        // Don't reload - the fetcher automatically revalidates the loader
-        // This keeps the Shopify session intact
       }
     }
   }, [fetcher.data, fetcher.state]);
@@ -207,8 +187,6 @@ export default function Index() {
     setSyncStatus("Connecting to Instagram...");
     setSyncProgress(10);
 
-    // Use fetcher to submit to the sync endpoint (using POST action instead of GET loader)
-    // This will automatically revalidate the loader after completion
     const formData = new FormData();
     formData.append("action", "sync");
     syncFetcher.submit(formData, {
@@ -217,7 +195,6 @@ export default function Index() {
     });
   };
 
-  // Handle sync fetcher response
   useEffect(() => {
     if (syncFetcher.state === "submitting" && isSyncing) {
       setSyncStatus("Fetching Instagram posts...");
@@ -227,7 +204,6 @@ export default function Index() {
     if (syncFetcher.state === "idle" && syncFetcher.data && isSyncing) {
       const result = syncFetcher.data as any;
 
-      // Check if there was an error in the response
       if (result.error) {
         setSyncStatus(`❌ ${result.error}`);
         setSyncProgress(0);
@@ -235,7 +211,6 @@ export default function Index() {
         return;
       }
 
-      // Success!
       setSyncStatus("Uploading media files to Shopify...");
       setSyncProgress(60);
 
@@ -245,22 +220,17 @@ export default function Index() {
 
         setTimeout(() => {
           setSyncProgress(100);
-          setSyncStatus("✓ Sync completed successfully!");
-
-          // Show detailed success message
+          setSyncStatus("Sync completed successfully!");
           setSyncSuccessMessage(
             `Successfully synced Instagram posts! Your content is now available in Shopify.`,
           );
 
-          // Reset sync state and revalidate loader data
           setTimeout(() => {
             setIsSyncing(false);
             setSyncStatus("");
             setSyncProgress(0);
-            // Revalidate to fetch updated stats without full page reload
             revalidator.revalidate();
 
-            // Clear success message after showing updated stats
             setTimeout(() => {
               setSyncSuccessMessage("");
             }, 5000);
@@ -270,7 +240,6 @@ export default function Index() {
     }
   }, [syncFetcher.state, syncFetcher.data, isSyncing, revalidator]);
 
-  // Handle theme fetcher response
   useEffect(() => {
     if (themeFetcher.state === "idle" && themeFetcher.data) {
       const result = themeFetcher.data as any;
@@ -289,22 +258,8 @@ export default function Index() {
     );
   };
 
-  const handleSwitchAccount = () => {
-    window.open(
-      `/instagram?shop=${encodeURIComponent(shop)}`,
-      "_parent",
-      "width=600,height=700",
-    );
-  };
-
   const handleRefresh = () => {
-    setIsRefreshing(true);
-    // Use revalidator instead of window.location.reload to avoid breaking Shopify session
     revalidator.revalidate();
-    // Reset loading state after a moment
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
   };
 
   const handleDeleteData = () => {
@@ -332,7 +287,6 @@ export default function Index() {
   };
 
   const handleAddToTheme = () => {
-    // Show modal to select page
     setShowPageModal(true);
   };
 
@@ -346,7 +300,6 @@ export default function Index() {
 
   const handleDownloadThemeFiles = async () => {
     try {
-      // Fetch the file
       const response = await fetch("/api/download-theme");
 
       if (!response.ok) {
@@ -355,10 +308,7 @@ export default function Index() {
         return;
       }
 
-      // Get the blob
       const blob = await response.blob();
-
-      // Create a download link and trigger it
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -390,9 +340,8 @@ export default function Index() {
     return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   };
 
-  // Calculate setup progress
   const hasPosts = syncStats.postsCount > 0;
-  const hasAddedToTheme = false; // You could track this in your database if needed
+  const hasAddedToTheme = false;
 
   type Step = {
     id: number;
@@ -433,7 +382,6 @@ export default function Index() {
     },
   ];
 
-  // Add to Theme is optional and not counted in progress
   const optionalSteps = [
     {
       id: 3,
@@ -441,7 +389,7 @@ export default function Index() {
       description:
         "Add the Instagram feed block to your store pages (optional). Make sure to click the save button in the theme editor.",
       completed: hasAddedToTheme,
-      current: false, // Never show as current step
+      current: false,
       action: handleAddToTheme,
       actionLabel: "Add to Theme",
       iconType: "theme" as const,
@@ -468,7 +416,6 @@ export default function Index() {
 
   return (
     <s-page>
-      {/* API Permissions Info Banner - Show when connected */}
       {isConnected && (
         <s-section>
           <s-banner tone="info">
@@ -485,7 +432,6 @@ export default function Index() {
         </s-section>
       )}
 
-      {/* Progress Steps Card */}
       <s-section>
         <s-card>
           <s-stack gap="base">
@@ -498,7 +444,6 @@ export default function Index() {
               </s-badge>
             </s-stack>
 
-            {/* Progress Bar - Using div with Polaris CSS variables */}
             <s-box padding="none" background="subdued" borderRadius="base">
               <div
                 style={{
@@ -514,12 +459,10 @@ export default function Index() {
               />
             </s-box>
 
-            {/* Steps List */}
             <s-stack gap="base">
               {allSteps.map((step, index) => (
                 <s-box key={step.id}>
                   <s-stack gap="small-200" direction="inline">
-                    {/* Step Icon/Status - Using div wrapper for custom styling */}
                     <div
                       style={{
                         minWidth: "40px",
@@ -546,7 +489,6 @@ export default function Index() {
                       )}
                     </div>
 
-                    {/* Step Content - Using div wrapper for flex */}
                     <div style={{ flex: 1 }}>
                       <s-stack gap="small-100">
                         <s-stack direction="inline" gap="small-200">
@@ -563,11 +505,9 @@ export default function Index() {
                         </s-stack>
                         <s-text color="subdued">{step.description}</s-text>
 
-                        {/* Action Button */}
                         {!step.completed && (step.current || step.optional) && (
                           <s-box padding="small-400 none small-400 none">
                             {step.id === 3 && showPageModal ? (
-                              // Show page selector for "Add to Theme" step
                               <s-stack gap="small-200">
                                 <s-text type="strong">Select a page:</s-text>
                                 {themePages.map((page) => {
@@ -637,13 +577,11 @@ export default function Index() {
                     </div>
                   </s-stack>
 
-                  {/* Divider between steps */}
                   {index < allSteps.length - 1 && <s-divider />}
                 </s-box>
               ))}
             </s-stack>
 
-            {/* Completion Message */}
             {completedSteps === steps.length && (
               <>
                 <s-divider />
@@ -662,7 +600,6 @@ export default function Index() {
         </s-card>
       </s-section>
 
-      {/* Delete Success Banner */}
       {deleteMessage && (
         <s-section>
           <s-banner tone="success" onDismiss={() => setDeleteMessage("")}>
@@ -671,7 +608,6 @@ export default function Index() {
         </s-section>
       )}
 
-      {/* Connection Success Banner */}
       {connectSuccessMessage && (
         <s-section>
           <s-banner
@@ -683,7 +619,6 @@ export default function Index() {
         </s-section>
       )}
 
-      {/* Sync Success Banner */}
       {syncSuccessMessage && (
         <s-section>
           <s-banner tone="success" onDismiss={() => setSyncSuccessMessage("")}>
@@ -706,7 +641,6 @@ export default function Index() {
         </s-section>
       )}
 
-      {/* Manual Sync Card */}
       {isConnected && (
         <s-section>
           <s-banner tone="info">
@@ -775,7 +709,6 @@ export default function Index() {
         </s-section>
       )}
 
-      {/* Connection Status */}
       <s-section>
         <s-card>
           <s-stack gap="base">
@@ -810,7 +743,7 @@ export default function Index() {
 
                 <s-stack gap="small-200" direction="inline">
                   <s-button
-                    onClick={handleSwitchAccount}
+                    onClick={handleConnect}
                     disabled={isSyncing || isActionRunning}
                   >
                     Switch Account
@@ -909,7 +842,6 @@ export default function Index() {
         </s-card>
       </s-section>
 
-      {/* Sync Statistics */}
       {isConnected && instagramAccount ? (
         <>
           <s-section>
@@ -923,7 +855,6 @@ export default function Index() {
                   gap: "16px",
                 }}
               >
-                {/* Posts Card */}
                 <s-clickable
                   href={`https://admin.shopify.com/store/${shop.replace(
                     ".myshopify.com",
@@ -943,7 +874,6 @@ export default function Index() {
                   </s-stack>
                 </s-clickable>
 
-                {/* Files Card */}
                 <s-clickable
                   href={`https://admin.shopify.com/store/${shop.replace(
                     ".myshopify.com",
@@ -963,7 +893,6 @@ export default function Index() {
                   </s-stack>
                 </s-clickable>
 
-                {/* Metaobjects Card */}
                 <s-clickable
                   href={`https://admin.shopify.com/store/${shop.replace(
                     ".myshopify.com",
@@ -990,7 +919,6 @@ export default function Index() {
             </s-stack>
           </s-section>
 
-          {/* Theme Snippets Download Section */}
           <s-section>
             <s-card>
               <s-stack gap="base">
@@ -1018,7 +946,6 @@ export default function Index() {
             </s-card>
           </s-section>
 
-          {/* Developer Guide */}
           <s-section>
             <s-card>
               <s-stack gap="base">
@@ -1079,7 +1006,6 @@ export default function Index() {
         <></>
       )}
 
-      {/* Design Configuration Section - Show when posts are synced */}
       {isConnected && hasPosts && (
         <s-section>
           <s-card>
@@ -1094,7 +1020,6 @@ export default function Index() {
 
               <s-divider />
 
-              {/* Two Column Layout: Settings Left, Preview Right */}
               <div
                 style={{
                   display: "grid",
@@ -1102,9 +1027,7 @@ export default function Index() {
                   gap: "24px",
                 }}
               >
-                {/* Left Column: Settings */}
                 <s-stack gap="base">
-                  {/* Number of Posts */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-text type="strong">
@@ -1127,7 +1050,6 @@ export default function Index() {
                     </s-stack>
                   </s-box>
 
-                  {/* Aspect Ratio */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-text type="strong">Aspect ratio</s-text>
@@ -1166,7 +1088,6 @@ export default function Index() {
                     </s-stack>
                   </s-box>
 
-                  {/* Border Radius */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-text type="strong">
@@ -1189,7 +1110,6 @@ export default function Index() {
                     </s-stack>
                   </s-box>
 
-                  {/* Gap */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-text type="strong">Gap: {designSettings.gap}px</s-text>
@@ -1210,7 +1130,6 @@ export default function Index() {
                     </s-stack>
                   </s-box>
 
-                  {/* Padding Vertical */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-text type="strong">
@@ -1233,7 +1152,6 @@ export default function Index() {
                     </s-stack>
                   </s-box>
 
-                  {/* Padding Horizontal */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-paragraph>
@@ -1262,7 +1180,6 @@ export default function Index() {
 
                   <s-divider />
 
-                  {/* Display Options */}
                   <s-box>
                     <s-stack gap="small-200">
                       <s-clickable
@@ -1312,7 +1229,6 @@ export default function Index() {
                   </s-box>
                 </s-stack>
 
-                {/* Right Column: Preview */}
                 <s-stack gap="base">
                   <style>{`
                     .hide-scrollbar::-webkit-scrollbar {
@@ -1342,7 +1258,6 @@ export default function Index() {
                     </s-stack>
                   </s-stack>
 
-                  {/* Preview Container */}
                   <s-box
                     background="subdued"
                     padding="small-200"
@@ -1357,7 +1272,6 @@ export default function Index() {
                         margin: "0 auto",
                       }}
                     >
-                      {/* Header */}
                       {designSettings.showHeader && (
                         <div
                           style={{
@@ -1372,7 +1286,6 @@ export default function Index() {
                         </div>
                       )}
 
-                      {/* Feed Preview */}
                       <div
                         style={{
                           display: "flex",
@@ -1386,7 +1299,7 @@ export default function Index() {
                       >
                         {instagramPosts
                           .slice(0, previewDevice === "desktop" ? 4 : 3)
-                          .map((post: any, index: number) => (
+                          .map((post: any) => (
                             <div
                               key={post.id}
                               style={{
@@ -1410,7 +1323,6 @@ export default function Index() {
                                 background: "#111",
                               }}
                             >
-                              {/* Image */}
                               {post.imageUrl && (
                                 <img
                                   src={post.imageUrl}
@@ -1425,7 +1337,6 @@ export default function Index() {
                                 />
                               )}
 
-                              {/* Overlay on hover */}
                               <div
                                 style={{
                                   position: "absolute",
@@ -1450,7 +1361,6 @@ export default function Index() {
                                   (e.currentTarget.style.opacity = "0")
                                 }
                               >
-                                {/* Instagram Icon */}
                                 <svg
                                   width="32px"
                                   height="32px"
@@ -1463,7 +1373,6 @@ export default function Index() {
                                   <path d="M44.5,21A3.5,3.5,0,1,1,48,17.5,3.5,3.5,0,0,1,44.5,21Zm0-5A1.5,1.5,0,1,0,46,17.5,1.5,1.5,0,0,0,44.5,16Z"></path>
                                 </svg>
 
-                                {/* Stats */}
                                 <div
                                   style={{
                                     display: "flex",
@@ -1526,7 +1435,6 @@ export default function Index() {
                         )}
                       </div>
 
-                      {/* Instagram Handle */}
                       {designSettings.showHandle &&
                         instagramAccount?.username && (
                           <div
@@ -1550,7 +1458,6 @@ export default function Index() {
 
               <s-divider />
 
-              {/* Info Banner */}
               <s-banner tone="info">
                 <s-text>
                   Configure settings here, then add the block to your theme.
@@ -1564,6 +1471,13 @@ export default function Index() {
     </s-page>
   );
 }
+
 export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
+  const headers = boundary.headers(headersArgs);
+  
+  // Add cache headers for dashboard data
+  // Cache for 2 minutes, allowing stale content while revalidating
+  headers.set('Cache-Control', 'private, max-age=120, stale-while-revalidate=300');
+  
+  return headers;
 };

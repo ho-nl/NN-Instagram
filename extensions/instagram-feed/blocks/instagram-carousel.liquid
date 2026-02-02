@@ -38,10 +38,15 @@
           {% else %}
             <img
               class="instagram-image"
-              src="{{ media | image_url: width: 800, height: 1200, crop: 'center' }}"
+              src="{{ media | image_url: width: 400, height: 600, crop: 'center' }}"
+              srcset="{{ media | image_url: width: 400, height: 600, crop: 'center' }} 400w,
+                      {{ media | image_url: width: 600, height: 900, crop: 'center' }} 600w"
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 400px"
               width="320"
               height="480"
               alt="Instagram Post Image"
+              loading="lazy"
+              decoding="async"
             >
           {% endif %}
         {% endfor %}
@@ -118,10 +123,16 @@
               {% else %}
                 <img
                   class="modal-media"
-                  src="{{ media | image_url: width: 1200 }}"
+                  src="{{ media | image_url: width: 800 }}"
+                  srcset="{{ media | image_url: width: 600 }} 600w,
+                          {{ media | image_url: width: 800 }} 800w,
+                          {{ media | image_url: width: 1200 }} 1200w"
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 80vw, 800px"
                   alt="Instagram post {{ forloop.index }}"
-                  width="1200"
-                  height="1200"
+                  width="800"
+                  height="800"
+                  loading="lazy"
+                  decoding="async"
                 >
               {% endif %}
             </div>

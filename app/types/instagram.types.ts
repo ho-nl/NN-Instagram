@@ -1,7 +1,3 @@
-/**
- * Type definitions for Instagram integration
- */
-
 export interface SyncStats {
   lastSyncTime: string | null;
   postsCount: number;

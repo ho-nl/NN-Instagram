@@ -1,10 +1,19 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { authenticate } from "../shopify.server";
 import archiver from "archiver";
+import type { GitHubTreeItem } from "../types/github.types";
 
 const GITHUB_REPO = "mohamedamezian/NN-Instagram-Carousel";
 const GITHUB_API = "https://api.github.com";
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // Optional
+
+interface GitHubTree {
+  tree: GitHubTreeItem[];
+}
+
+interface RepoData {
+  default_branch: string;
+}
 
 function isInstagramFile(filePath: string): boolean {
   return filePath.toLowerCase().includes("instagram");
@@ -88,8 +97,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   await authenticate.admin(request);
 
   try {
-    console.log("📦 Generating theme zip from GitHub...");
-
     // Fetch the repository tree
     const { tree: allFiles, defaultBranch } = await fetchGitHubTree();
 
@@ -113,8 +120,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         },
       );
     }
-
-    console.log(`✨ Found ${instagramFiles.length} Instagram files`);
 
     // Create a zip archive in memory
     const archive = archiver("zip", {
@@ -140,7 +145,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
     // Download and add each file to the zip
     for (const file of instagramFiles) {
-      console.log(`  ⬇️  ${file.path}`);
       const content = await downloadFile(file.path, defaultBranch);
       archive.append(content, { name: file.path });
     }
@@ -151,10 +155,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     // Wait for the zip to be fully created
     const zipBuffer = await zipPromise;
 
-    console.log(
-      `✅ Zip created: ${(zipBuffer.length / 1024).toFixed(2)} KB with ${instagramFiles.length} files`,
-    );
-
     // Return the zip file as a Uint8Array (compatible with Response)
     return new Response(new Uint8Array(zipBuffer), {
       status: 200,
@@ -162,10 +162,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         "Content-Type": "application/zip",
         "Content-Disposition": "attachment; filename=nn-instagram-theme.zip",
         "Content-Length": zipBuffer.length.toString(),
+        // Cache for 1 hour (theme files don't change often)
+        "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+        // Enable compression
+        "Content-Encoding": "gzip",
       },
     });
   } catch (error) {
-    console.error("❌ Error generating theme zip:", error);
+    console.error("Error generating theme zip:", error);
     return new Response(
       JSON.stringify({
         success: false,

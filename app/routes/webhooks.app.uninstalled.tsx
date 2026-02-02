@@ -5,9 +5,7 @@ import db from "../db.server";
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     // authenticate.webhook() automatically validates HMAC signature
-    const { shop, session, topic, admin } = await authenticate.webhook(request);
-
-    console.log(`Received ${topic} webhook for ${shop}`);
+    const { shop, session, admin } = await authenticate.webhook(request);
 
     // Delete Instagram files and metaobject definitions
     if (admin) {
@@ -39,7 +37,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               variables: { fileIds },
             },
           );
-          console.log(`Deleted ${fileIds.length} Instagram files for ${shop}`);
         }
 
         // Find the definition IDs
@@ -60,7 +57,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         // Find and delete nn_instagram_post and nn_instagram_list definitions
         const instagramDefinitions = definitions.filter(
           (def: { type: string }) =>
-            def.type === "nn_instagram_post" || def.type === "nn_instagram_list",
+            def.type === "nn_instagram_post" ||
+            def.type === "nn_instagram_list",
         );
 
         for (const definition of instagramDefinitions) {
@@ -80,7 +78,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
               variables: { id: definition.id },
             },
           );
-          console.log(`Deleted metaobject definition: ${definition.type}`);
         }
       } catch (error) {
         console.error(`Failed to delete Instagram data for ${shop}:`, error);
@@ -96,7 +93,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // Clean up social media data for compliance
     try {
       await db.socialAccount.deleteMany({ where: { shop } });
-      console.log(`Cleaned up social accounts for shop: ${shop}`);
     } catch (error) {
       console.error(`Failed to clean up social accounts for ${shop}:`, error);
     }
@@ -109,7 +105,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // If authenticate.webhook() throws, HMAC validation failed
     // Return 401 Unauthorized
     if (error instanceof Error && error.message.includes("HMAC")) {
-      console.error("HMAC validation failed");
       return new Response("Unauthorized", { status: 401 });
     }
 

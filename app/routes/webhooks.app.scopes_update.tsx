@@ -5,9 +5,7 @@ import db from "../db.server";
 export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     // authenticate.webhook() automatically validates HMAC signature
-    const { payload, session, topic, shop } =
-      await authenticate.webhook(request);
-    console.log(`Received ${topic} webhook for ${shop}`);
+    const { payload, session } = await authenticate.webhook(request);
 
     const current = payload.current as string[];
     if (session) {
@@ -29,7 +27,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     // If authenticate.webhook() throws, HMAC validation failed
     // Return 401 Unauthorized
     if (error instanceof Error && error.message.includes("HMAC")) {
-      console.error("HMAC validation failed");
       return new Response("Unauthorized", { status: 401 });
     }
 

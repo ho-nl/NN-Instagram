@@ -28,9 +28,7 @@ const MetaobjectDefinition = `#graphql
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-
   try {
-    // First check if the metaobject definition already exists
     const checkResponse = await admin.graphql(
       `#graphql
       query {
@@ -44,21 +42,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         }
       }`,
     );
-
     const checkResult = await checkResponse.json();
     const definitions = checkResult?.data?.metaobjectDefinitions?.edges || [];
     const existsList = definitions.some(
-      (edge: { node: { type: string } }) => edge.node.type === "nn_instagram_list",
+      (edge: { node: { type: string } }) =>
+        edge.node.type === "nn_instagram_list",
     );
     const existsPost = definitions.some(
-      (edge: { node: { type: string } }) => edge.node.type === "nn_instagram_post",
+      (edge: { node: { type: string } }) =>
+        edge.node.type === "nn_instagram_post",
     );
-
     let createdList = false;
     let createdPost = false;
     let errors: string[] = [];
-
-    // Create post definition if missing
     if (!existsPost) {
       const postResponse = await admin.graphql(MetaobjectDefinition, {
         variables: {
@@ -116,21 +112,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               `${err.field?.join(".")}: ${err.message}`,
           ),
         );
-        console.error("Metaobject post creation errors:", errors);
       } else if (
         postResult?.data?.metaobjectDefinitionCreate?.metaobjectDefinition
       ) {
         createdPost = true;
-        console.log(
-          "Metaobject post definition created:",
-          postResult.data.metaobjectDefinitionCreate.metaobjectDefinition,
-        );
       }
     }
 
-    // Create list definition if missing
     if (!existsList) {
-      // First, get the nn_instagram_post definition ID
       const postDefQuery = await admin.graphql(
         `#graphql
         query {
@@ -227,15 +216,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
               `${err.field?.join(".")}: ${err.message}`,
           ),
         );
-        console.error("Metaobject list creation errors:", errors);
       } else if (
         listResult?.data?.metaobjectDefinitionCreate?.metaobjectDefinition
       ) {
         createdList = true;
-        console.log(
-          "Metaobject list definition created:",
-          listResult.data.metaobjectDefinitionCreate.metaobjectDefinition,
-        );
       }
     }
 
@@ -248,7 +232,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       errors,
     };
   } catch (error) {
-    console.error("Error in metaobject definition creation:", error);
     return {
       apiKey: process.env.SHOPIFY_API_KEY || "",
       exists: false,
@@ -272,7 +255,6 @@ export default function Index() {
   const hasErrors = errors && errors.length > 0;
   const isLoading = !isSetupComplete && !hasErrors;
 
-  // Auto-refresh while loading (check every 3 seconds)
   useEffect(() => {
     if (isLoading) {
       const timer = setTimeout(() => {
@@ -283,7 +265,6 @@ export default function Index() {
     }
   }, [isLoading]);
 
-  // If still loading/creating metaobjects, show loading state
   if (isLoading) {
     return (
       <AppProvider embedded apiKey={apiKey}>
@@ -317,15 +298,12 @@ export default function Index() {
       <Outlet />
 
       <s-page>
-        {/* grid template basic*/}
         <s-stack gap="base">
           <s-grid gridTemplateColumns="repeat(12, 1fr)" gap="base">
             <s-grid-item gridColumn="span 12" gridRow="span 1">
-              {/* Header */}
               <s-section>
                 <s-stack alignItems="center">
                   <s-heading>NN Instagram</s-heading>
-
                   <s-text>
                     Developer-focused app that syncs Instagram posts to Shopify
                     metaobjects. Build custom Instagram feeds with complete
@@ -342,9 +320,7 @@ export default function Index() {
                     Instagram Feed Sync for Developers - Raw data access to
                     build custom Instagram integrations
                   </s-text>
-
                   <s-divider />
-
                   <s-heading>What does this app do?</s-heading>
                   <s-text>
                     This app syncs your Instagram posts to Shopify as native
@@ -381,7 +357,6 @@ export default function Index() {
                 </s-stack>
               </s-section>
             </s-grid-item>
-
             <s-grid-item gridColumn="span 4" gridRow="span 6">
               <s-section>
                 <s-stack gap="base">
@@ -397,12 +372,10 @@ export default function Index() {
                       <s-badge tone="critical">Action Required</s-badge>
                     )}
                   </s-stack>
-
-                  {/* First Install - In Progress Banner */}
                   {!isSetupComplete && !hasErrors && (
                     <s-banner tone="info">
                       <s-stack gap="small-200">
-                        <s-text type="strong">🔧 Setting up your app...</s-text>
+                        <s-text type="strong">Setting up your app...</s-text>
                         <s-text>
                           The app is automatically creating the required Shopify
                           metaobject definitions. This is a one-time setup that
@@ -415,8 +388,6 @@ export default function Index() {
                       </s-stack>
                     </s-banner>
                   )}
-
-                  {/* Success Banner */}
                   {isSetupComplete && !hasErrors && (
                     <s-banner tone="success">
                       <s-stack gap="small-200">
@@ -431,8 +402,6 @@ export default function Index() {
                       </s-stack>
                     </s-banner>
                   )}
-
-                  {/* Error Banner */}
                   {hasErrors && (
                     <s-banner tone="critical">
                       <s-stack gap="small-200">
@@ -449,21 +418,15 @@ export default function Index() {
                       </s-stack>
                     </s-banner>
                   )}
-
                   <s-divider />
-
-                  {/* Setup Details */}
                   <s-stack gap="base">
                     <s-heading>Metaobject Definitions</s-heading>
-
                     {!isSetupComplete && !hasErrors && (
                       <s-text color="subdued">
                         Creating required metaobject definitions for Instagram
                         data storage...
                       </s-text>
                     )}
-
-                    {/* Instagram Post Status */}
                     <s-box
                       padding="base"
                       background="subdued"
@@ -497,8 +460,6 @@ export default function Index() {
                         </s-stack>
                       </s-stack>
                     </s-box>
-
-                    {/* Instagram List Status */}
                     <s-box
                       padding="base"
                       background="subdued"
@@ -532,7 +493,6 @@ export default function Index() {
                         </s-stack>
                       </s-stack>
                     </s-box>
-
                     {!isSetupComplete && !hasErrors && (
                       <s-banner tone="info">
                         <s-text>
@@ -543,8 +503,6 @@ export default function Index() {
                       </s-banner>
                     )}
                   </s-stack>
-
-                  {/* Refresh button for setup in progress */}
                   {!isSetupComplete && !hasErrors && (
                     <>
                       <s-divider />
@@ -562,8 +520,6 @@ export default function Index() {
                       </s-stack>
                     </>
                   )}
-
-                  {/* Error Details */}
                   {hasErrors && (
                     <>
                       <s-divider />
@@ -585,13 +541,10 @@ export default function Index() {
                   )}
                   <s-divider />
                 </s-stack>
-
-                {/* Next Steps - Only show when setup is complete */}
                 {isSetupComplete && !hasErrors && (
                   <s-section>
                     <s-stack gap="base">
                       <s-heading>Next Steps</s-heading>
-
                       <s-stack gap="base">
                         <s-stack gap="small-100">
                           <s-text type="strong">1. Connect Your Account</s-text>
@@ -600,7 +553,6 @@ export default function Index() {
                             permissions to access your posts
                           </s-text>
                         </s-stack>
-
                         <s-stack gap="small-100">
                           <s-text type="strong">2. Sync Your Posts</s-text>
                           <s-text color="subdued">
@@ -608,7 +560,6 @@ export default function Index() {
                             one click
                           </s-text>
                         </s-stack>
-
                         <s-stack gap="small-100">
                           <s-text type="strong">3. Build Your Feed</s-text>
                           <s-text color="subdued">
@@ -618,9 +569,7 @@ export default function Index() {
                           </s-text>
                         </s-stack>
                       </s-stack>
-
                       <s-divider />
-
                       <s-button
                         variant="primary"
                         onClick={() => navigate("/app/dashboard")}
@@ -632,37 +581,30 @@ export default function Index() {
                 )}
               </s-section>
             </s-grid-item>
-
             <s-grid-item gridColumn="span 4" gridRow="span 3">
               <s-section>
                 <s-stack gap="small-200">
                   <s-heading>Key Features</s-heading>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Your Instagram data in metaobjects</s-text>
                   </s-stack>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Build custom feeds in Liquid</s-text>
                   </s-stack>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Complete design control</s-text>
                   </s-stack>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Media files stored in Shopify CDN</s-text>
                   </s-stack>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Automatic sync every 24 hours</s-text>
                   </s-stack>
-
                   <s-stack direction="inline" gap="small-200">
                     <s-icon type="check-circle" tone="success" />
                     <s-text>Starter Liquid templates included</s-text>
